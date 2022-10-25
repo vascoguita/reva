@@ -1,0 +1,26 @@
+name: Setup Go
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        required: true
+        type: string
+
+jobs:
+  setup-go:
+    runs-on: self-hosted
+    steps:
+      - name: Setup Go environment
+        uses: actions/setup-go@v3.3.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+      - name: Setup Golang caches
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
