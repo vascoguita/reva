@@ -1,7 +1,7 @@
 name: Check Changelog
 on:
   pull_request:
-    paths-ignore: [".github/**", "Makefile", "tools/**", "docs/**", "tests/**", ".drone.star", ".drone.env", "go.mod", "go.sum"]
+    paths-ignore: [".github/**", "Makefile", "tools/**", "docs/**", "tests/**", ".drone.star", ".drone.env", ".fossa.yml", "go.mod", "go.sum"]
 
 jobs:
   check-changelog:
