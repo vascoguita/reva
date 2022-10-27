@@ -1,0 +1,10 @@
+version: 3
+
+targets:
+  only:
+    - type: gomod
+      path: cmd/reva
+    - type: gomod
+      path: cmd/revad
+    - type: gomod
+      path: tools/check-license
