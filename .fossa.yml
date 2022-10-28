@@ -1,7 +1,6 @@
 version: 3
 
-paths:
-  only:
-    - cmd/reva/
-    - cmd/revad/
-    - tools/check-license/
+targets:
+  exclude:
+    - type: npm
+      path: docs/
