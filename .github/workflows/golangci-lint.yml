@@ -23,3 +23,5 @@ jobs:
             ${{ runner.os }}-go-
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3.3.0
+        with:
+          args: --timeout 3m0s
