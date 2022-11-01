@@ -14,24 +14,20 @@ issues:
         - scopelint
 linters:
   enable:
-    - maligned
+    - fieldalignment
     - bodyclose
-    - deadcode
+    - unused
     - errcheck
     - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - structcheck
     - typecheck
-    - unused
-    - varcheck
     - depguard
-    - golint
+    - revive
     - goimports
     - unconvert
-    - scopelint
+    - exportloopref
     - misspell
     - gocritic
     - prealloc
-    #- gosec
