@@ -14,16 +14,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - tags:
-              - ${{ ((github.event_name != 'pull_request') && format('{0}/reva:latest', secrets.DOCKERHUB_ORGANIZATION )) || '' }}
-              - ${{ ((github.ref_type != 'tag') && format('{0}/reva:{1}', secrets.DOCKERHUB_ORGANIZATION, github.ref_name )) || '' }}
+          - tag: reva:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}
             file: Dockerfile.reva
-        #  - tags: revad:latest
-        #    file: Dockerfile.revad
-        #  - tags: revad:latest-eos
-        #    file: Dockerfile.revad-eos
-        #  - tags: revad:latest-ceph
-        #    file: Dockerfile.revad-ceph
+          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}
+            file: Dockerfile.revad
+          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}-eos
+            file: Dockerfile.revad-eos
+          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}-ceph
+            file: Dockerfile.revad-ceph
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -37,10 +35,10 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build ${{ ((github.event_name != 'pull_request') && 'and push') || '' }} ${{ matrix.tags }}
+      - name: Build ${{ ((github.event_name != 'pull_request') && 'and push') || '' }} ${{ matrix.tag }}
         uses: docker/build-push-action@v3
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           file: ${{ matrix.file }}
-          tags: ${{ matrix.tags }}
+          tags: ${{ ((github.event_name != 'pull_request') && format('{0}/{1}', secrets.DOCKERHUB_ORGANIZATION, matrix.tag)) || '' }}
