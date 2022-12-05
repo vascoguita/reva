@@ -15,8 +15,8 @@ jobs:
       matrix:
         include:
           - tags:
-              - ${{ ((GITHUB_EVENT_NAME != 'pull_request') && format('{0}/reva:latest', secrets.DOCKERHUB_ORGANIZATION )) || '' }}
-              - ${{ ((GITHUB_REF_TYPE != 'tag') && format('{0}/reva:{1}', secrets.DOCKERHUB_ORGANIZATION, GITHUB_REF_NAME )) || '' }}
+              - ${{ ((github.event_name != 'pull_request') && format('{0}/reva:latest', secrets.DOCKERHUB_ORGANIZATION )) || '' }}
+              - ${{ ((github.ref_type != 'tag') && format('{0}/reva:{1}', secrets.DOCKERHUB_ORGANIZATION, github.ref_name )) || '' }}
             file: Dockerfile.reva
         #  - tags: revad:latest
         #    file: Dockerfile.revad
@@ -33,14 +33,14 @@ jobs:
         uses: docker/setup-buildx-action@v2
       - name: Login to Docker Hub
         uses: docker/login-action@v2
-        if: ${{ GITHUB_EVENT_NAME != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' }}
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build ${{ ((GITHUB_EVENT_NAME != 'pull_request') && 'and push') || '' }} ${{ matrix.tags }}
+      - name: Build ${{ ((github.event_name != 'pull_request') && 'and push') || '' }} ${{ matrix.tags }}
         uses: docker/build-push-action@v3
         with:
           context: .
-          push: ${{ GITHUB_EVENT_NAME != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           file: ${{ matrix.file }}
           tags: ${{ matrix.tags }}
