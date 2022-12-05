@@ -14,13 +14,13 @@ jobs:
     strategy:
       matrix:
         include:
-          - tag: reva:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}
+          - tag: reva:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}
             file: Dockerfile.reva
-          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}
             file: Dockerfile.revad
-          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}-eos
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}-eos
             file: Dockerfile.revad-eos
-          - tag: revad:${{ (github.ref_type == 'tag') && github.ref_name) || 'latest' }}-ceph
+          - tag: revad:${{ ((github.ref_type == 'tag') && github.ref_name) || 'latest' }}-ceph
             file: Dockerfile.revad-ceph
     steps:
       - name: Checkout
