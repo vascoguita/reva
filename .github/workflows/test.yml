@@ -2,7 +2,7 @@ name: Test
 on: [pull_request, push, workflow_dispatch]
 
 env:
-  TEST_IMAGE: 'revad:test'
+  TAG: 'revad:test'
 
 jobs:
   test:
@@ -38,26 +38,28 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.${{ matrix.image }}
-          tags: ${{ env.TEST_IMAGE }}
+          tags: ${{ env.TAG }}
           load: ${{ matrix.image == 'revad' }}
-      - name: Upload ${{ env.TEST_IMAGE }} to artifacts
+      - name: Upload ${{ env.TAG }} to artifacts
         uses: ishworkh/docker-image-artifact-upload@v1
         if: ${{ matrix.image == 'revad' }}
         with:
-          image: ${{ env.TEST_IMAGE }}
+          image: ${{ env.TAG }}
           retention_days: '1'
   litmus:
     needs: docker
     runs-on: self-hosted
     strategy:
       matrix:
-        test: [litmus-1-only, litmus-2-only]
+        profile: [1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Download image
         uses: ishworkh/docker-image-artifact-download@v1
         with:
-          image: ${{ env.TEST_IMAGE }}
+          image: ${{ env.TAG }}
       - name: Test
-        run: make ${{ matrix.test }}
+        run: make litmus-only
+        env:
+          PROFILE: ${{ matrix.profile }}
