@@ -33,7 +33,7 @@ jobs:
         with:
           context: .
           file: ${{ inputs.file }}
-          tags: ${{ inputs.tag }}
+          tags: ${{ (inputs.push && format('{0}/', secrets.DOCKERHUB_ORGANIZATION)) || '' }}${{ inputs.tag }}
           load: ${{ inputs.load }}
           push: ${{ inputs.push }}
       - name: Upload ${{ inputs.tag }} Docker image to artifacts
