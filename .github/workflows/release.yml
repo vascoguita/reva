@@ -35,6 +35,7 @@ jobs:
           - image: revad-ceph
             tag: revad:${{ github.ref_name }}-ceph
     uses: ./.github/workflows/docker.yml
+    secrets: inherit
     with:
       file: docker/Dockerfile.${{ matrix.image }}
       tag: ${{ matrix.tag }}
