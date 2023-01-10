@@ -27,13 +27,13 @@ jobs:
       matrix:
         include:
           - image: reva
-            tag: reva:${{ github.ref_name }}
+            tag: ${{ secrets.DOCKERHUB_ORGANIZATION }}/reva:${{ github.ref_name }}
           - image: revad
-            tag: revad:${{ github.ref_name }}
+            tag: ${{ secrets.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}
           - image: revad-eos
-            tag: revad:${{ github.ref_name }}-eos
+            tag: ${{ secrets.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-eos
           - image: revad-ceph
-            tag: revad:${{ github.ref_name }}-ceph
+            tag: ${{ secrets.DOCKERHUB_ORGANIZATION }}/revad:${{ github.ref_name }}-ceph
     uses: ./.github/workflows/docker.yml
     secrets: inherit
     with:
