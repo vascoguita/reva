@@ -27,16 +27,18 @@ jobs:
       matrix:
         include:
           - image: reva
-            tag: reva:${{ github.ref_name }}
+            tags: reva:${{ github.ref_name }}
           - image: revad
-            tag: revad:${{ github.ref_name }}
+            tags: 
+              - revad:${{ github.ref_name }}
+              - latest
           - image: revad-eos
-            tag: revad:${{ github.ref_name }}-eos
+            tags: revad:${{ github.ref_name }}-eos
           - image: revad-ceph
-            tag: revad:${{ github.ref_name }}-ceph
+            tags: revad:${{ github.ref_name }}-ceph
     uses: ./.github/workflows/docker.yml
     secrets: inherit
     with:
       file: docker/Dockerfile.${{ matrix.image }}
-      tag: ${{ matrix.tag }}
+      tags: ${{ toJSON(matrix.tags) }}
       push: true
