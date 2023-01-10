@@ -38,5 +38,5 @@ jobs:
     secrets: inherit
     with:
       file: docker/Dockerfile.${{ matrix.image }}
-      tag: ${{ matrix.tag }}
+      tag: ${{ secrets.DOCKERHUB_ORGANIZATION }}/${{ matrix.tag }}
       push: true
