@@ -43,7 +43,7 @@ jobs:
     with:
       file: ${{ matrix.file }}
   docker-revad:
-    name: docker (revad)
+    name: docker (docker/Dockerfile.revad)
     uses: ./.github/workflows/docker.yml
     with:
       file: docker/Dockerfile.revad
