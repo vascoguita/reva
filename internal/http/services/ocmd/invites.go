@@ -19,6 +19,7 @@
 package ocmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,6 +34,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -40,9 +42,9 @@ type invitesHandler struct {
 	gatewayClient gateway.GatewayAPIClient
 }
 
-func (h *invitesHandler) init(c *config) error {
+func (h *invitesHandler) init(ctx context.Context, c *config) error {
 	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	h.gatewayClient, err = pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return err
 	}
@@ -60,6 +62,9 @@ type acceptInviteRequest struct {
 // AcceptInvite informs avout an accepted invitation so that the users
 // can initiate the OCM share creation.
 func (h *invitesHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "AcceptInvite")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 

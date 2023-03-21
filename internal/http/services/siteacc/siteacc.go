@@ -24,25 +24,26 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/siteacc"
 	"github.com/cs3org/reva/pkg/siteacc/config"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "siteacc"
+const tracerName = "siteacc"
 
 func init() {
 	global.Register(serviceName, New)
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf *config.Configuration
 	log  *zerolog.Logger
 
 	siteacc *siteacc.SiteAccounts
 }
-
-const (
-	serviceName = "siteacc"
-)
 
 // Close is called when this service is being stopped.
 func (s *svc) Close() error {

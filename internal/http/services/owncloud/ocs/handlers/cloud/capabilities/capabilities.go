@@ -24,6 +24,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // Handler renders the capability endpoint.
@@ -237,6 +238,9 @@ func (h *Handler) Init(c *config.Config) {
 
 // GetCapabilities renders the capabilities.
 func (h *Handler) GetCapabilities(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetCapabilities")
+	defer span.End()
+
 	c := h.getCapabilitiesForUserAgent(r.Context(), r.UserAgent())
 	response.WriteOCSSuccess(w, r, c)
 }

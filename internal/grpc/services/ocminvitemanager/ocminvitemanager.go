@@ -35,11 +35,14 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "ocminvitemanager"
 
 func init() {
 	rgrpc.Register("ocminvitemanager", New)
@@ -58,6 +61,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf      *config
 	repo      invite.Repository
 	ocmClient *client.OCMClient
@@ -137,6 +141,9 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.GenerateInviteTokenRequest) (*invitepb.GenerateInviteTokenResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GenerateInviteToken")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	token := CreateToken(s.conf.tokenExpiration, user.GetId(), req.Description)
 
@@ -153,6 +160,9 @@ func (s *service) GenerateInviteToken(ctx context.Context, req *invitepb.Generat
 }
 
 func (s *service) ListInviteTokens(ctx context.Context, req *invitepb.ListInviteTokensRequest) (*invitepb.ListInviteTokensResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListInviteTokens")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	tokens, err := s.repo.ListTokens(ctx, user.Id)
 	if err != nil {
@@ -247,6 +257,9 @@ func getOCMEndpoint(originProvider *ocmprovider.ProviderInfo) (string, error) {
 }
 
 func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRequest) (*invitepb.AcceptInviteResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AcceptInvite")
+	defer span.End()
+
 	token, err := s.repo.GetToken(ctx, req.InviteToken.Token)
 	if err != nil {
 		if errors.Is(err, invite.ErrTokenNotFound) {
@@ -292,7 +305,7 @@ func (s *service) AcceptInvite(ctx context.Context, req *invitepb.AcceptInviteRe
 }
 
 func (s *service) getUserInfo(ctx context.Context, id *userpb.UserId) (*userpb.User, error) {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySVC))
+	gw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySVC))
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +327,9 @@ func isTokenValid(token *invitepb.InviteToken) bool {
 }
 
 func (s *service) GetAcceptedUser(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*invitepb.GetAcceptedUserResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAcceptedUser")
+	defer span.End()
+
 	user, ok := getUserFilter(ctx, req)
 	if !ok {
 		return &invitepb.GetAcceptedUserResponse{
@@ -356,6 +372,9 @@ func getUserFilter(ctx context.Context, req *invitepb.GetAcceptedUserRequest) (*
 }
 
 func (s *service) FindAcceptedUsers(ctx context.Context, req *invitepb.FindAcceptedUsersRequest) (*invitepb.FindAcceptedUsersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindAcceptedUsers")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	acceptedUsers, err := s.repo.FindRemoteUsers(ctx, user.GetId(), req.GetFilter())
 	if err != nil {

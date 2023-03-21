@@ -41,11 +41,14 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
+
+const tracerName = "oidc"
 
 func init() {
 	registry.Register("oidc", New)
@@ -148,6 +151,9 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 // which contains the access token that we can use to contact the UserInfo endpoint
 // and get the user claims.
 func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
 
@@ -210,7 +216,7 @@ func (am *mgr) Authenticate(ctx context.Context, _, clientSecret string) (*user.
 		Type:     getUserType(claims[am.c.IDClaim].(string)),
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	gwc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "oidc: error getting gateway grpc client")
 	}
@@ -265,6 +271,9 @@ func (am *mgr) getUserID(claims map[string]interface{}) (int64, int64) {
 }
 
 func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getOAuthCtx")
+	defer span.End()
+
 	// Sometimes for testing we need to skip the TLS check, that's why we need a
 	// custom HTTP client.
 	customHTTPClient := rhttp.GetHTTPClient(
@@ -280,6 +289,9 @@ func (am *mgr) getOAuthCtx(ctx context.Context) context.Context {
 
 // getOIDCProvider returns a singleton OIDC provider.
 func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getOIDCProvider")
+	defer span.End()
+
 	ctx = am.getOAuthCtx(ctx)
 	log := appctx.GetLogger(ctx)
 
@@ -303,6 +315,9 @@ func (am *mgr) getOIDCProvider(ctx context.Context) (*oidc.Provider, error) {
 }
 
 func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, subject string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolveUser")
+	defer span.End()
+
 	var (
 		value   string
 		resolve bool
@@ -348,7 +363,7 @@ func (am *mgr) resolveUser(ctx context.Context, claims map[string]interface{}, s
 		return nil
 	}
 
-	upsc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	upsc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return errors.Wrap(err, "error getting user provider grpc client")
 	}

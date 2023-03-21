@@ -26,8 +26,11 @@ import (
 	"github.com/cs3org/reva/pkg/auth/registry/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 )
+
+const tracerName = "static"
 
 func init() {
 	registry.Register("static", New)
@@ -50,6 +53,9 @@ type reg struct {
 }
 
 func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "ListProviders")
+	defer span.End()
+
 	providers := make([]*registrypb.ProviderInfo, len(r.rules))
 	for k, v := range r.rules {
 		providers = append(providers, &registrypb.ProviderInfo{
@@ -61,6 +67,9 @@ func (r *reg) ListProviders(ctx context.Context) ([]*registrypb.ProviderInfo, er
 }
 
 func (r *reg) GetProvider(ctx context.Context, authType string) (*registrypb.ProviderInfo, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "GetProvider")
+	defer span.End()
+
 	if address, ok := r.rules[authType]; ok {
 		return &registrypb.ProviderInfo{
 			ProviderType: authType,

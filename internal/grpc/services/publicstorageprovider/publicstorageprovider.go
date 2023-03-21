@@ -34,15 +34,17 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	gstatus "google.golang.org/grpc/status"
 )
+
+const serviceName = "publicstorageprovider"
+const tracerName = "publicstorageprovider"
 
 func init() {
 	rgrpc.Register("publicstorageprovider", New)
@@ -55,6 +57,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf      *config
 	mountPath string
 	mountID   string
@@ -84,6 +87,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New creates a new IsPublic Storage Provider service.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -92,7 +98,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	mountPath := c.MountPath
 	mountID := c.MountID
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewayAddr))
+	gateway, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +114,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -121,30 +130,48 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // SetLock puts a lock on the given reference.
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // GetLock returns an existing lock on the given reference.
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 // Unlock removes an existing lock from the given reference.
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileDownload")
+	defer span.End()
+
 	statReq := &provider.StatRequest{Ref: req.Ref}
 	statRes, err := s.Stat(ctx, statReq)
 	if err != nil {
@@ -169,6 +196,9 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.Reference) (*provider.Reference, string, *link.PublicShare, *rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "translatePublicRefToCS3Ref")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	tkn, relativePath, err := s.unwrap(ctx, ref)
 	if err != nil {
@@ -208,6 +238,9 @@ func (s *service) translatePublicRefToCS3Ref(ctx context.Context, ref *provider.
 // end         = /einstein/files/public-links/foldera/folderb/
 
 func (s *service) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "initiateFileDownload")
+	defer span.End()
+
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -260,6 +293,9 @@ func (s *service) initiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileUpload")
+	defer span.End()
+
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -316,41 +352,57 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPath")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DeleteStorageSpace")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "CreateContainer")
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateContainer")
 	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
 
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
@@ -384,6 +436,9 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	ref, _, _, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
 	case err != nil:
@@ -397,13 +452,8 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Delete")
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
 	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
 
 	cs3Ref, _, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Ref)
 	switch {
@@ -437,19 +487,8 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Move")
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
 	defer span.End()
-
-	span.SetAttributes(
-		attribute.KeyValue{
-			Key:   "source",
-			Value: attribute.StringValue(req.Source.String()),
-		},
-		attribute.KeyValue{
-			Key:   "destination",
-			Value: attribute.StringValue(req.Destination.String()),
-		},
-	)
 
 	cs3RefSource, tknSource, ls, st, err := s.translatePublicRefToCS3Ref(ctx, req.Source)
 	switch {
@@ -500,14 +539,8 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("publicstorageprovider").Start(ctx, "Stat")
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Stat")
 	defer span.End()
-
-	span.SetAttributes(
-		attribute.KeyValue{
-			Key:   "source",
-			Value: attribute.StringValue(req.Ref.String()),
-		})
 
 	var (
 		tkn          string
@@ -576,6 +609,9 @@ func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provide
 }
 
 func (s *service) augmentStatResponse(ctx context.Context, res *provider.StatResponse, shareInfo *provider.ResourceInfo, share *link.PublicShare, tkn string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "augmentStatResponse")
+	defer span.End()
+
 	// prevent leaking internal paths
 	if res.Info != nil {
 		if err := addShare(res.Info, share); err != nil {
@@ -622,6 +658,9 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListContainer")
+	defer span.End()
+
 	tkn, relativePath, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
@@ -686,6 +725,9 @@ func filterPermissions(l *provider.ResourcePermissions, r *provider.ResourcePerm
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token string, relativePath string, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "unwrap")
+	defer span.End()
+
 	if ref.ResourceId != nil {
 		return "", "", errtypes.BadRequest("need absolute path ref: got " + ref.String())
 	}
@@ -713,10 +755,16 @@ func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (token st
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFileVersions")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreFileVersion")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -725,46 +773,79 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycle")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListGrants")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddGrant")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateReference")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateSymlink")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateGrant")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveGrant")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetQuota")
+	defer span.End()
+
 	return nil, gstatus.Errorf(codes.Unimplemented, "method not implemented")
 }
 
@@ -777,7 +858,10 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 
 // resolveToken returns the path and share for the publicly shared resource.
 func (s *service) resolveToken(ctx context.Context, token string) (*link.PublicShare, *provider.ResourceInfo, *rpc.Status, error) {
-	driver, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewayAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolveToken")
+	defer span.End()
+
+	driver, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewayAddr))
 	if err != nil {
 		return nil, nil, nil, err
 	}

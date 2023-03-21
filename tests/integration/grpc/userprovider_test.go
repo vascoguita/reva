@@ -27,10 +27,13 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/pkg/tracing"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"google.golang.org/grpc/metadata"
 )
+
+const tracerName = "grpc_test"
 
 var _ = Describe("user providers", func() {
 	var (
@@ -46,6 +49,8 @@ var _ = Describe("user providers", func() {
 	JustBeforeEach(func() {
 		var err error
 		ctx = context.Background()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "JustBeforeEach")
+		defer span.End()
 
 		// Add auth token
 		user := &userpb.User{
@@ -67,7 +72,7 @@ var _ = Describe("user providers", func() {
 
 		revads, err = startRevads(dependencies, nil, nil, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetUserProviderServiceClient(pool.Endpoint(revads["users"].GrpcAddress))
+		serviceClient, err = pool.GetUserProviderServiceClient(ctx, pool.Endpoint(revads["users"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 	})
 

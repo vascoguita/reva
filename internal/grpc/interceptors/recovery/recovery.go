@@ -23,27 +23,44 @@ import (
 	"runtime/debug"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+const tracerName = "recovery"
+
 // NewUnary returns a server interceptor that adds telemetry to
 // grpc calls.
 func NewUnary() grpc.UnaryServerInterceptor {
-	interceptor := grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc))
-	return interceptor
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "recovery UnaryServerInterceptor")
+		defer span.End()
+
+		interceptor := grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc))
+		return interceptor(ctx, req, info, handler)
+	}
 }
 
 // NewStream returns a streaming server interceptor that adds telemetry to
 // streaming grpc calls.
 func NewStream() grpc.StreamServerInterceptor {
-	interceptor := grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc))
-	return interceptor
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "recovery StreamServerInterceptor")
+		defer span.End()
+
+		interceptor := grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandlerContext(recoveryFunc))
+		return interceptor(srv, ss, info, handler)
+	}
 }
 
 func recoveryFunc(ctx context.Context, p interface{}) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "recovery recoveryFunc")
+	defer span.End()
+
 	debug.PrintStack()
 	log := appctx.GetLogger(ctx)
 	log.Error().Msgf("%+v; stack: %s", p, debug.Stack())

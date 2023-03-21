@@ -30,9 +30,12 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "eoshomewrapper"
 
 func init() {
 	registry.Register("eoshomewrapper", New)
@@ -89,6 +92,9 @@ func New(m map[string]interface{}) (storage.FS, error) {
 // StorageId in the ResourceInfo objects.
 
 func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMD")
+	defer span.End()
+
 	res, err := w.FS.GetMD(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
@@ -103,6 +109,9 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 }
 
 func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFolder")
+	defer span.End()
+
 	res, err := w.FS.ListFolder(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
@@ -114,10 +123,16 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	return errtypes.NotSupported("eos: deny grant is only enabled for project spaces")
 }
 
 func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getMountID")
+	defer span.End()
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	b := bytes.Buffer{}
 	if err := w.mountIDTemplate.Execute(&b, u); err != nil {

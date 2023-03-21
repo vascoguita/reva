@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/node"
 	"github.com/cs3org/reva/pkg/storage/utils/decomposedfs/xattrs"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -51,6 +52,9 @@ const (
 
 // CreateStorageSpace creates a storage space.
 func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	// spaces will be located by default in the root of the storage.
 	r, err := fs.lu.RootNode(ctx)
 	if err != nil {
@@ -159,6 +163,9 @@ func (fs *Decomposedfs) CreateStorageSpace(ctx context.Context, req *provider.Cr
 // Spaces are persisted with symlinks in /spaces/<type>/<spaceid> pointing to ../../nodes/<nodeid>, the root node of the space
 // The spaceid is a concatenation of storageid + "!" + nodeid.
 func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	// TODO check filters
 
 	// TODO when a space symlink is broken delete the space for cleanup
@@ -202,7 +209,7 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 		return spaces, nil
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.o.GatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(fs.o.GatewayAddr))
 	if err != nil {
 		return nil, err
 	}
@@ -264,6 +271,9 @@ func (fs *Decomposedfs) ListStorageSpaces(ctx context.Context, filter []*provide
 
 // UpdateStorageSpace updates a storage space.
 func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	space := req.StorageSpace
 
 	_, spaceID, err := utils.SplitStorageSpaceID(space.Id.OpaqueId)
@@ -324,6 +334,9 @@ func (fs *Decomposedfs) UpdateStorageSpace(ctx context.Context, req *provider.Up
 // Internally createHiddenSpaceFolder leverages the use of node.Child() to create a new node under the space root.
 // createHiddenSpaceFolder is just a contextual alias for node.Child() for ".spaces".
 func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Node) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createHiddenSpaceFolder")
+	defer span.End()
+
 	hiddenSpace, err := r.Child(ctx, ".space")
 	if err != nil {
 		return err
@@ -333,6 +346,9 @@ func (fs *Decomposedfs) createHiddenSpaceFolder(ctx context.Context, r *node.Nod
 }
 
 func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeID string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createStorageSpace")
+	defer span.End()
+
 	// create space type dir
 	if err := os.MkdirAll(filepath.Join(fs.o.Root, "spaces", spaceType), 0700); err != nil {
 		return err
@@ -353,6 +369,9 @@ func (fs *Decomposedfs) createStorageSpace(ctx context.Context, spaceType, nodeI
 }
 
 func (fs *Decomposedfs) storageSpaceFromNode(ctx context.Context, node *node.Node, nodePath, spaceType string, canListAllSpaces bool) (*provider.StorageSpace, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "storageSpaceFromNode")
+	defer span.End()
+
 	owner, err := node.Owner()
 	if err != nil {
 		return nil, err

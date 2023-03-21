@@ -31,13 +31,17 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "gateway"
+const tracerName = "gateway"
+
 func init() {
-	rgrpc.Register("gateway", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -118,6 +122,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.GrpcMiddleware
 	c               *config
 	dataGatewayURL  url.URL
 	tokenmgr        token.Manager

@@ -49,12 +49,15 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/ace"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 )
+
+const tracerName = "owncloud"
 
 const (
 	// Currently,extended file attributes have four separated
@@ -216,11 +219,16 @@ type ocfs struct {
 }
 
 func (fs *ocfs) Shutdown(ctx context.Context) error {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "Shutdown")
+	defer span.End()
 	return fs.pool.Close()
 }
 
 // scan files and add uuid to path mapping to kv store.
 func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "scanFiles")
+	defer span.End()
+
 	if fs.c.Scan {
 		fs.c.Scan = false // TODO ... in progress use mutex ?
 		log := appctx.GetLogger(ctx)
@@ -260,6 +268,9 @@ func (fs *ocfs) scanFiles(ctx context.Context, conn redis.Conn) {
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username.
 func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toInternalPath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -299,6 +310,9 @@ func (fs *ocfs) toInternalPath(ctx context.Context, sp string) (ip string) {
 }
 
 func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toInternalShadowPath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -340,6 +354,9 @@ func (fs *ocfs) toInternalShadowPath(ctx context.Context, sp string) (internal s
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username.
 func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getVersionsPath")
+	defer span.End()
+
 	// ip = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
@@ -371,6 +388,9 @@ func (fs *ocfs) getVersionsPath(ctx context.Context, ip string) string {
 
 // owncloud stores trashed items in the files_trashbin subfolder of a users home.
 func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getRecyclePath")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -381,6 +401,9 @@ func (fs *ocfs) getRecyclePath(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getVersionRecyclePath")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -391,6 +414,9 @@ func (fs *ocfs) getVersionRecyclePath(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toStoragePath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -428,6 +454,9 @@ func (fs *ocfs) toStoragePath(ctx context.Context, ip string) (sp string) {
 }
 
 func (fs *ocfs) toStorageShadowPath(ctx context.Context, ip string) (sp string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toStorageShadowPath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -471,6 +500,9 @@ func (fs *ocfs) getOwner(ip string) string {
 
 // TODO cache user lookup.
 func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUser")
+	defer span.End()
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	// check if username matches and id is set
 	if u.Username == usernameOrID && u.Id != nil && u.Id.OpaqueId != "" {
@@ -483,7 +515,7 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(fs.c.UserProviderEndpoint))
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).
@@ -528,6 +560,9 @@ func (fs *ocfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.Us
 
 // permissionSet returns the permission set for the current user.
 func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "permissionSet")
+	defer span.End()
+
 	if owner == nil {
 		return &provider.ResourcePermissions{
 			Stat: true,
@@ -590,6 +625,9 @@ func (fs *ocfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provid
 	}
 }
 func (fs *ocfs) convertToResourceInfo(ctx context.Context, fi os.FileInfo, ip string, sp string, c redis.Conn, mdKeys []string) *provider.ResourceInfo {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToResourceInfo")
+	defer span.End()
+
 	id := readOrCreateID(ctx, ip, c)
 
 	etag := calcEtag(ctx, fi)
@@ -705,10 +743,16 @@ func getResourceType(isDir bool) provider.ResourceType {
 
 // CreateStorageSpace creates a storage space.
 func (fs *ocfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToResourceInfo")
+	defer span.End()
+
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readOrCreateID")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	// read extended file attribute for id
@@ -744,6 +788,9 @@ func readOrCreateID(ctx context.Context, ip string, conn redis.Conn) string {
 }
 
 func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getPath")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	c := fs.pool.Get()
 	defer c.Close()
@@ -775,6 +822,9 @@ func (fs *ocfs) getPath(ctx context.Context, id *provider.ResourceId) (string, e
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace.
 func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPathByID")
+	defer span.End()
+
 	ip, err := fs.getPath(ctx, id)
 	if err != nil {
 		return "", err
@@ -797,6 +847,9 @@ func (fs *ocfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (strin
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolve")
+	defer span.End()
+
 	// if storage id is set look up that
 	if ref.ResourceId != nil {
 		ip, err := fs.getPath(ctx, ref.ResourceId)
@@ -811,10 +864,16 @@ func (fs *ocfs) resolve(ctx context.Context, ref *provider.Reference) (string, e
 }
 
 func (fs *ocfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	return errtypes.NotSupported("ocfs: deny grant not supported")
 }
 
 func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddGrant")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -842,6 +901,9 @@ func (fs *ocfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provid
 
 // extractACEsFromAttrs reads ACEs in the list of attrs from the file.
 func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entries []*ace.ACE) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "extractACEsFromAttrs")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	entries = []*ace.ACE{}
 	for i := range attrs {
@@ -872,6 +934,9 @@ func extractACEsFromAttrs(ctx context.Context, ip string, attrs []string) (entri
 // We need the storage relative path so we can calculate the permissions
 // for the node based on all acls in the tree up to the root.
 func (fs *ocfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readPermissions")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
@@ -989,6 +1054,9 @@ func isNotFound(err error) bool {
 }
 
 func (fs *ocfs) readACE(ctx context.Context, ip string, principal string) (e *ace.ACE, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readACE")
+	defer span.End()
+
 	var b []byte
 	if b, err = xattr.Get(ip, sharePrefix+principal); err != nil {
 		return nil, err
@@ -1022,6 +1090,9 @@ func addPermissions(p1 *provider.ResourcePermissions, p2 *provider.ResourcePermi
 }
 
 func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListGrants")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
@@ -1060,6 +1131,9 @@ func (fs *ocfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants
 }
 
 func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveGrant")
+	defer span.End()
+
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1092,6 +1166,9 @@ func (fs *ocfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pro
 }
 
 func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateGrant")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1118,6 +1195,9 @@ func (fs *ocfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *pro
 }
 
 func (fs *ocfs) CreateHome(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -1144,6 +1224,9 @@ func (fs *ocfs) CreateHome(ctx context.Context) error {
 
 // If home is enabled, the relative home is always the empty string.
 func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	if !fs.c.EnableHome {
 		return "", errtypes.NotSupported("ocfs: get home not supported")
 	}
@@ -1151,6 +1234,9 @@ func (fs *ocfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateDir")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -1180,6 +1266,9 @@ func (fs *ocfs) CreateDir(ctx context.Context, ref *provider.Reference) (err err
 
 // TouchFile as defined in the storage.FS interface.
 func (fs *ocfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
@@ -1192,6 +1281,9 @@ func (fs *ocfs) isShareFolderRoot(sp string) bool {
 }
 
 func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateReference")
+	defer span.End()
+
 	if !fs.isShareFolderChild(sp) {
 		return errtypes.PermissionDenied("ocfs: cannot create references outside the share folder: share_folder=" + "/Shares" + " path=" + sp)
 	}
@@ -1217,6 +1309,9 @@ func (fs *ocfs) CreateReference(ctx context.Context, sp string, targetURI *url.U
 }
 
 func (fs *ocfs) setMtime(ctx context.Context, ip string, mtime string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "setMtime")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if mt, err := parseMTime(mtime); err == nil {
 		// updating mtime also updates atime
@@ -1237,6 +1332,9 @@ func (fs *ocfs) setMtime(ctx context.Context, ip string, mtime string) error {
 	return nil
 }
 func (fs *ocfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -1380,6 +1478,9 @@ func parseMTime(v string) (t time.Time, err error) {
 }
 
 func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -1467,21 +1568,33 @@ func (fs *ocfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refere
 
 // GetLock returns an existing lock on the given reference.
 func (fs *ocfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference.
 func (fs *ocfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (fs *ocfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference.
 func (fs *ocfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -1495,6 +1608,9 @@ func (fs *ocfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provi
 // We will live with that compromise since this storage driver will be
 // deprecated soon.
 func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
+	defer span.End()
+
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1544,6 +1660,9 @@ func (fs *ocfs) Delete(ctx context.Context, ref *provider.Reference) (err error)
 }
 
 func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "trash")
+	defer span.End()
+
 	// set origin location in metadata
 	if err := xattr.Set(ip, trashOriginPrefix, []byte(origin)); err != nil {
 		return err
@@ -1571,6 +1690,9 @@ func (fs *ocfs) trash(ctx context.Context, ip string, rp string, origin string) 
 }
 
 func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "trashVersions")
+	defer span.End()
+
 	vp := fs.getVersionsPath(ctx, ip)
 	vrp, err := fs.getVersionRecyclePath(ctx)
 	if err != nil {
@@ -1593,6 +1715,9 @@ func (fs *ocfs) trashVersions(ctx context.Context, ip string, origin string) err
 }
 
 func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
+	defer span.End()
+
 	var oldIP string
 	if oldIP, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -1651,6 +1776,9 @@ func (fs *ocfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (e
 }
 
 func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMD")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		// TODO return correct errtype
@@ -1699,6 +1827,9 @@ func (fs *ocfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []str
 }
 
 func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getMDShareFolder")
+	defer span.End()
+
 	ip := fs.toInternalShadowPath(ctx, sp)
 
 	// check permissions
@@ -1739,6 +1870,9 @@ func (fs *ocfs) getMDShareFolder(ctx context.Context, sp string, mdKeys []string
 }
 
 func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFolder")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)
@@ -1761,6 +1895,9 @@ func (fs *ocfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys 
 }
 
 func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithNominalHome")
+	defer span.End()
+
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
@@ -1804,6 +1941,9 @@ func (fs *ocfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []str
 }
 
 func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if p == home {
 		log.Debug().Msg("listing home")
@@ -1824,6 +1964,9 @@ func (fs *ocfs) listWithHome(ctx context.Context, home, p string, mdKeys []strin
 }
 
 func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listHome")
+	defer span.End()
+
 	// list files
 	ip := fs.toInternalPath(ctx, home)
 
@@ -1884,6 +2027,9 @@ func (fs *ocfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*
 }
 
 func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listShareFolderRoot")
+	defer span.End()
+
 	ip := fs.toInternalShadowPath(ctx, sp)
 
 	// check permissions
@@ -1933,6 +2079,9 @@ func (fs *ocfs) listShareFolderRoot(ctx context.Context, sp string, mdKeys []str
 }
 
 func (fs *ocfs) archiveRevision(ctx context.Context, vbp string, ip string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "archiveRevision")
+	defer span.End()
+
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(filepath.Dir(vp), 0700); err != nil {
@@ -1967,6 +2116,9 @@ func (fs *ocfs) copyMD(s string, t string) (err error) {
 }
 
 func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Download")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
@@ -1995,6 +2147,9 @@ func (fs *ocfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadC
 }
 
 func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRevisions")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "ocfs: error resolving reference")
@@ -2039,6 +2194,9 @@ func (fs *ocfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*
 }
 
 func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo) *provider.FileVersion {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "filterAsRevision")
+	defer span.End()
+
 	if strings.HasPrefix(md.Name(), bn) {
 		// versions have filename.ext.v12345678
 		version := md.Name()[len(bn)+2:] // truncate "<base filename>.v" to get version mtime
@@ -2060,10 +2218,16 @@ func (fs *ocfs) filterAsRevision(ctx context.Context, bn string, md os.FileInfo)
 }
 
 func (fs *ocfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DownloadRevision")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("download revision")
 }
 
 func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRevision")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving reference")
@@ -2123,6 +2287,9 @@ func (fs *ocfs) RestoreRevision(ctx context.Context, ref *provider.Reference, re
 }
 
 func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycleItem")
+	defer span.End()
+
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "ocfs: error resolving recycle path")
@@ -2157,6 +2324,9 @@ func (fs *ocfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePat
 }
 
 func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "EmptyRecycle")
+	defer span.End()
+
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2175,6 +2345,9 @@ func (fs *ocfs) EmptyRecycle(ctx context.Context) error {
 }
 
 func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileInfo) *provider.RecycleItem {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToRecycleItem")
+	defer span.End()
+
 	// trashbin items have filename.ext.d12345678
 	suffix := filepath.Ext(md.Name())
 	if len(suffix) == 0 || !strings.HasPrefix(suffix, ".d") {
@@ -2216,6 +2389,9 @@ func (fs *ocfs) convertToRecycleItem(ctx context.Context, rp string, md os.FileI
 }
 
 func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -2251,6 +2427,9 @@ func (fs *ocfs) ListRecycle(ctx context.Context, basePath, key, relativePath str
 }
 
 func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	// TODO check permission? on what? user must be the owner?
 	log := appctx.GetLogger(ctx)
 	rp, err := fs.getRecyclePath(ctx)
@@ -2292,15 +2471,24 @@ func (fs *ocfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativeP
 }
 
 func (fs *ocfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space.
 func (fs *ocfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "propagate")
+	defer span.End()
+
 	var root string
 	if fs.c.EnableHome {
 		root = fs.toInternalPath(ctx, "/")
@@ -2352,6 +2540,9 @@ func (fs *ocfs) propagate(ctx context.Context, leafPath string) error {
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string, ri *provider.ResourceInfo) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readChecksumIntoResourceChecksum")
+	defer span.End()
+
 	v, err := xattr.Get(nodePath, checksumPrefix+algo)
 	log := appctx.GetLogger(ctx).
 		Debug().
@@ -2374,6 +2565,9 @@ func readChecksumIntoResourceChecksum(ctx context.Context, nodePath, algo string
 }
 
 func readChecksumIntoOpaque(ctx context.Context, nodePath, algo string, ri *provider.ResourceInfo) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readChecksumIntoOpaque")
+	defer span.End()
+
 	v, err := xattr.Get(nodePath, checksumPrefix+algo)
 	log := appctx.GetLogger(ctx).
 		Debug().

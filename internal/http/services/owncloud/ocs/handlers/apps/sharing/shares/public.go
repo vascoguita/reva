@@ -33,15 +33,19 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
 func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "createPublicLinkShare")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -170,13 +174,16 @@ func (h *Handler) createPublicLinkShare(w http.ResponseWriter, r *http.Request, 
 }
 
 func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSharesRequest_Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "listPublicShares")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	// TODO(refs) why is this guard needed? Are we moving towards a gateway only for service discovery? without a gateway this is dead code.
 	if h.gatewayAddr != "" {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}
@@ -222,8 +229,12 @@ func (h *Handler) listPublicShares(r *http.Request, filters []*link.ListPublicSh
 }
 
 func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
-	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "isPublicShare")
+	defer span.End()
+
+	ctx := r.Context()
+	logger := appctx.GetLogger(ctx)
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		logger.Err(err)
 	}
@@ -246,10 +257,14 @@ func (h *Handler) isPublicShare(r *http.Request, oid string) bool {
 }
 
 func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "updatePublicShare")
+	defer span.End()
+
 	updates := []*link.UpdatePublicShareRequest_Update{}
 	logger := appctx.GetLogger(r.Context())
 
-	gwC, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	gwC, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		log.Err(err).Str("shareID", shareID).Msg("updatePublicShare")
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "error getting a connection to the gateway service", nil)
@@ -420,9 +435,11 @@ func (h *Handler) updatePublicShare(w http.ResponseWriter, r *http.Request, shar
 }
 
 func (h *Handler) removePublicShare(w http.ResponseWriter, r *http.Request, shareID string) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "removePublicShare")
+	defer span.End()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -473,6 +490,9 @@ func ocPublicPermToCs3(permKey int, h *Handler) (*provider.ResourcePermissions, 
 }
 
 func permissionFromRequest(r *http.Request, h *Handler) (*provider.ResourcePermissions, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "permissionFromRequest")
+	defer span.End()
+
 	var err error
 	// phoenix sends: {"permissions": 15}. See ocPublicPermToRole struct for mapping
 

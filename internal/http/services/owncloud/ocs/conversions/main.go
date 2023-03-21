@@ -37,9 +37,12 @@ import (
 	"github.com/cs3org/reva/pkg/mime"
 	"github.com/cs3org/reva/pkg/publicshare"
 	publicsharemgr "github.com/cs3org/reva/pkg/publicshare/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/user"
 	usermgr "github.com/cs3org/reva/pkg/user/manager/registry"
 )
+
+const tracerName = "conversions"
 
 const (
 	// ShareTypeUser refers to user shares.
@@ -182,6 +185,9 @@ type MatchValueData struct {
 
 // CS3Share2ShareData converts a cs3api user share into shareData data model.
 func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*ShareData, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CS3Share2ShareData")
+	defer span.End()
+
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later
@@ -211,6 +217,9 @@ func CS3Share2ShareData(ctx context.Context, share *collaboration.Share) (*Share
 
 // PublicShare2ShareData converts a cs3api public share into shareData data model.
 func PublicShare2ShareData(share *link.PublicShare, r *http.Request, publicURL string) *ShareData {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "PublicShare2ShareData")
+	defer span.End()
+
 	sd := &ShareData{
 		// share.permissions are mapped below
 		// Displaynames are added later

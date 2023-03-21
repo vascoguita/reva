@@ -28,6 +28,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -35,21 +36,30 @@ import (
 
 // AcceptReceivedShare handles Post Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) AcceptReceivedShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "AcceptReceivedShare")
+	defer span.End()
+
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, false)
 }
 
 // RejectReceivedShare handles DELETE Requests on /apps/files_sharing/api/v1/shares/{shareid}.
 func (h *Handler) RejectReceivedShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "RejectReceivedShare")
+	defer span.End()
+
 	shareID := chi.URLParam(r, "shareid")
 	h.updateReceivedShare(w, r, shareID, true)
 }
 
 func (h *Handler) updateReceivedShare(w http.ResponseWriter, r *http.Request, shareID string, rejectShare bool) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "updateReceivedShare")
+	defer span.End()
+
 	ctx := r.Context()
 	logger := appctx.GetLogger(ctx)
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return

@@ -33,11 +33,11 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/log"
 	"github.com/cs3org/reva/internal/http/interceptors/providerauthorizer"
 	"github.com/cs3org/reva/pkg/rhttp/global"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/rhttp/utils"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/propagation"
 )
 
 // New returns a new server.
@@ -205,10 +205,8 @@ func (s *Server) registerServices() error {
 				err = errors.Wrapf(err, "http service %s could not be started,", svcName)
 				return err
 			}
-
-			// instrument services with opencensus tracing.
-			h := traceHandler(svcName, svc.Handler())
-			s.handlers[svc.Prefix()] = h
+			svc.SetMiddleware(svcName, svc.Prefix())
+			s.handlers[svc.Prefix()] = svc.Handler()
 			s.svcs[svc.Prefix()] = svc
 			s.unprotected = append(s.unprotected, getUnprotected(svc.Prefix(), svc.Unprotected())...)
 			s.log.Info().Msgf("http service enabled: %s@/%s", svcName, svc.Prefix())
@@ -272,22 +270,13 @@ func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, 
 	var match string
 
 	for k := range s.handlers {
-		if urlHasPrefix(url, k) && len(k) > len(match) {
+		if utils.UrlHasPrefix(url, k) && len(k) > len(match) {
 			match = k
 		}
 	}
 
 	h, ok := s.handlers[match]
 	return h, match, ok
-}
-
-func getSubURL(url, prefix string) string {
-	// pre cond: prefix is a prefix for url
-	// example: url = "/api/v0/", prefix = "/api", res = "/v0"
-	url = cleanURL(url)
-	prefix = cleanURL(prefix)
-
-	return url[len(prefix):]
 }
 
 func (s *Server) getHandler() (http.Handler, error) {
@@ -302,7 +291,7 @@ func (s *Server) getHandler() (http.Handler, error) {
 		// find by longest common path
 		if h, url, ok := s.getHandlerLongestCommongURL(r.URL.Path); ok {
 			s.log.Debug().Msgf("http routing: url=%s", url)
-			r.URL.Path = getSubURL(r.URL.Path, url)
+			r.URL.Path = utils.GetSubURL(r.URL.Path, url)
 			h.ServeHTTP(w, r)
 			return
 		}
@@ -320,7 +309,7 @@ func (s *Server) getHandler() (http.Handler, error) {
 
 	for _, triple := range s.middlewares {
 		s.log.Info().Msgf("chaining http middleware %s with priority  %d", triple.Name, triple.Priority)
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+		handler = triple.Middleware(handler)
 	}
 
 	for _, v := range s.unprotected {
@@ -348,22 +337,19 @@ func (s *Server) getHandler() (http.Handler, error) {
 	coreMiddlewares = append(coreMiddlewares, &middlewareTriple{Middleware: appctx.New(s.log), Name: "appctx"})
 
 	for _, triple := range coreMiddlewares {
-		handler = triple.Middleware(traceHandler(triple.Name, handler))
+		handler = triple.Middleware(handler)
 	}
 
+	ms := map[string]tracing.HttpMiddlewarer{}
+	for prefix, svc := range s.svcs {
+		if m, ok := svc.(tracing.HttpMiddlewarer); ok {
+			ms[prefix] = m
+		}
+	}
+
+	handler = tracing.Middleware(handler, ms)
+
 	return handler, nil
-}
-
-func traceHandler(name string, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := rtrace.Propagator.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
-		t := rtrace.Provider.Tracer("reva")
-		ctx, span := t.Start(ctx, name)
-		defer span.End()
-
-		rtrace.Propagator.Inject(ctx, propagation.HeaderCarrier(r.Header))
-		h.ServeHTTP(w, r.WithContext(ctx))
-	})
 }
 
 func addProviderAuthMiddleware(conf *config, unprotected []string) (global.Middleware, error) {

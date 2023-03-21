@@ -34,10 +34,13 @@ import (
 	utils "github.com/cs3org/reva/pkg/cbox/utils"
 	"github.com/cs3org/reva/pkg/group"
 	"github.com/cs3org/reva/pkg/group/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/gomodule/redigo/redis"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog/log"
 )
+
+const tracerName = "rest"
 
 func init() {
 	registry.Register("rest", New)
@@ -191,6 +194,9 @@ func (m *manager) fetchAllGroupAccounts() error {
 }
 
 func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]interface{}) (*grouppb.Group, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "parseAndCacheGroup")
+	defer span.End()
+
 	id, ok := groupData["groupIdentifier"].(string)
 	if !ok {
 		return nil, errors.New("rest: missing upn in user data")
@@ -227,6 +233,9 @@ func (m *manager) parseAndCacheGroup(ctx context.Context, groupData map[string]i
 }
 
 func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchingMembers bool) (*grouppb.Group, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGroup")
+	defer span.End()
+
 	g, err := m.fetchCachedGroupDetails(gid)
 	if err != nil {
 		return nil, err
@@ -244,6 +253,9 @@ func (m *manager) GetGroup(ctx context.Context, gid *grouppb.GroupId, skipFetchi
 }
 
 func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skipFetchingMembers bool) (*grouppb.Group, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGroupByClaim")
+	defer span.End()
+
 	if claim == "group_name" {
 		return m.GetGroup(ctx, &grouppb.GroupId{OpaqueId: value}, skipFetchingMembers)
 	}
@@ -265,6 +277,9 @@ func (m *manager) GetGroupByClaim(ctx context.Context, claim, value string, skip
 }
 
 func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMembers bool) ([]*grouppb.Group, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindGroups")
+	defer span.End()
+
 	// Look at namespaces filters. If the query starts with:
 	// "a" or none => get egroups
 	// other filters => get empty list
@@ -283,6 +298,9 @@ func (m *manager) FindGroups(ctx context.Context, query string, skipFetchingMemb
 }
 
 func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*userpb.UserId, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMembers")
+	defer span.End()
+
 	users, err := m.fetchCachedGroupMembers(gid)
 	if err == nil {
 		return users, nil
@@ -320,6 +338,9 @@ func (m *manager) GetMembers(ctx context.Context, gid *grouppb.GroupId) ([]*user
 }
 
 func (m *manager) HasMember(ctx context.Context, gid *grouppb.GroupId, uid *userpb.UserId) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "HasMember")
+	defer span.End()
+
 	groupMemers, err := m.GetMembers(ctx, gid)
 	if err != nil {
 		return false, err

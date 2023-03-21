@@ -34,11 +34,14 @@ import (
 	"github.com/cs3org/reva/pkg/logger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "ldap"
 
 func init() {
 	registry.Register("ldap", New)
@@ -132,6 +135,9 @@ func (am *mgr) Configure(m map[string]interface{}) error {
 }
 
 func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	l, err := utils.GetLDAPConnection(&am.c.LDAPConn)
 	if err != nil {
@@ -171,7 +177,7 @@ func (am *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) 
 		OpaqueId: sr.Entries[0].GetEqualFoldAttributeValue(am.c.Schema.UID),
 		Type:     user.UserType_USER_TYPE_PRIMARY, // TODO: assign the appropriate user type
 	}
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(am.c.GatewaySvc))
+	gwc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(am.c.GatewaySvc))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ldap: error getting gateway grpc client")
 	}

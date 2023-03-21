@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -34,7 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
@@ -49,17 +48,18 @@ type copy struct {
 type intermediateDirRefFunc func() (*provider.Reference, *rpc.Status, error)
 
 func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "copy")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathCopy")
 	defer span.End()
 
+	ctx := r.Context()
 	if s.c.EnableHTTPTpc {
 		if r.Header.Get("Source") != "" {
 			// HTTP Third-Party Copy Pull mode
-			s.handleTPCPull(ctx, w, r, ns)
+			s.handleTPCPull(w, r, ns)
 			return
 		} else if r.Header.Get("Destination") != "" {
 			// HTTP Third-Party Copy Push mode
-			s.handleTPCPush(ctx, w, r, ns)
+			s.handleTPCPush(w, r, ns)
 			return
 		}
 	}
@@ -96,26 +96,30 @@ func (s *svc) handlePathCopy(w http.ResponseWriter, r *http.Request, ns string) 
 		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
 
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
 	if cp == nil {
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if err := s.executePathCopy(ctx, client, w, r, cp); err != nil {
+	if err := s.executePathCopy(client, w, r, cp); err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error executing path copy")
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.WriteHeader(cp.successCode)
 }
 
-func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
+func (s *svc) executePathCopy(client gateway.GatewayAPIClient, w http.ResponseWriter, r *http.Request, cp *copy) error {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "executePathCopy")
+	defer span.End()
+
+	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	log.Debug().Str("src", cp.sourceInfo.Path).Str("dst", cp.destination.Path).Msg("descending")
 	if cp.sourceInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -136,7 +140,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 					code:    SabredavPermissionDenied,
 					message: m,
 				})
-				HandleWebdavError(log, w, b, err)
+				HandleWebdavError(ctx, log, w, b, err)
 			}
 			return nil
 		}
@@ -162,7 +166,7 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 
 		for i := range res.Infos {
 			childDst := &provider.Reference{Path: path.Join(cp.destination.Path, path.Base(res.Infos[i].Path))}
-			err := s.executePathCopy(ctx, client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
+			err := s.executePathCopy(client, w, r, &copy{sourceInfo: res.Infos[i], destination: childDst, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -220,10 +224,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 					code:    SabredavPermissionDenied,
 					message: m,
 				})
-				HandleWebdavError(log, w, b, err)
+				HandleWebdavError(ctx, log, w, b, err)
 				return nil
 			}
-			HandleErrorStatus(log, w, uRes.Status)
+			HandleErrorStatus(ctx, log, w, uRes.Status)
 			return nil
 		}
 
@@ -272,9 +276,10 @@ func (s *svc) executePathCopy(ctx context.Context, client gateway.GatewayAPIClie
 }
 
 func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_copy")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesCopy")
 	defer span.End()
 
+	ctx := r.Context()
 	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -292,7 +297,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
@@ -307,7 +312,7 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
@@ -316,18 +321,18 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
 	}
 
-	cp := s.prepareCopy(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
+	cp := s.prepareCopy(w, r, srcRef, dstRef, intermediateDirRefFunc, &sublog)
 	if cp == nil {
 		return
 	}
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	err = s.executeSpacesCopy(ctx, w, client, cp)
+	err = s.executeSpacesCopy(w, r, client, cp)
 	if err != nil {
 		sublog.Error().Err(err).Str("depth", cp.depth).Msg("error descending directory")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -335,7 +340,11 @@ func (s *svc) handleSpacesCopy(w http.ResponseWriter, r *http.Request, spaceID s
 	w.WriteHeader(cp.successCode)
 }
 
-func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, client gateway.GatewayAPIClient, cp *copy) error {
+func (s *svc) executeSpacesCopy(w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, cp *copy) error {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "executeSpacesCopy")
+	defer span.End()
+
+	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	log.Debug().Interface("src", cp.sourceInfo).Interface("dst", cp.destination).Msg("descending")
 
@@ -358,7 +367,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 					code:    SabredavPermissionDenied,
 					message: m,
 				})
-				HandleWebdavError(log, w, b, err)
+				HandleWebdavError(ctx, log, w, b, err)
 			}
 			return nil
 		}
@@ -385,7 +394,7 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 				ResourceId: cp.destination.ResourceId,
 				Path:       utils.MakeRelativePath(path.Join(cp.destination.Path, res.Infos[i].Path)),
 			}
-			err := s.executeSpacesCopy(ctx, w, client, &copy{sourceInfo: res.Infos[i], destination: childRef, depth: cp.depth, successCode: cp.successCode})
+			err := s.executeSpacesCopy(w, r, client, &copy{sourceInfo: res.Infos[i], destination: childRef, depth: cp.depth, successCode: cp.successCode})
 			if err != nil {
 				return err
 			}
@@ -437,10 +446,10 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 					code:    SabredavPermissionDenied,
 					message: m,
 				})
-				HandleWebdavError(log, w, b, err)
+				HandleWebdavError(ctx, log, w, b, err)
 				return nil
 			}
-			HandleErrorStatus(log, w, uRes.Status)
+			HandleErrorStatus(ctx, log, w, uRes.Status)
 			return nil
 		}
 
@@ -489,7 +498,11 @@ func (s *svc) executeSpacesCopy(ctx context.Context, w http.ResponseWriter, clie
 	return nil
 }
 
-func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
+func (s *svc) prepareCopy(w http.ResponseWriter, r *http.Request, srcRef, dstRef *provider.Reference, intermediateDirRef intermediateDirRefFunc, log *zerolog.Logger) *copy {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "prepareCopy")
+	defer span.End()
+
+	ctx := r.Context()
 	overwrite, err := extractOverwrite(w, r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -498,7 +511,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(log, w, b, err)
+		HandleWebdavError(ctx, log, w, b, err)
 		return nil
 	}
 	depth, err := extractDepth(w, r)
@@ -509,13 +522,13 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(log, w, b, err)
+		HandleWebdavError(ctx, log, w, b, err)
 		return nil
 	}
 
 	log.Debug().Str("overwrite", overwrite).Str("depth", depth).Msg("copy")
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -538,9 +551,9 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 				code:    SabredavNotFound,
 				message: m,
 			})
-			HandleWebdavError(log, w, b, err)
+			HandleWebdavError(ctx, log, w, b, err)
 		}
-		HandleErrorStatus(log, w, srcStatRes.Status)
+		HandleErrorStatus(ctx, log, w, srcStatRes.Status)
 		return nil
 	}
 
@@ -552,7 +565,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return nil
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(log, w, srcStatRes.Status)
+		HandleErrorStatus(ctx, log, w, srcStatRes.Status)
 		return nil
 	}
 
@@ -568,7 +581,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 				code:    SabredavPreconditionFailed,
 				message: m,
 			})
-			HandleWebdavError(log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
+			HandleWebdavError(ctx, log, w, b, err) // 412, see https://tools.ietf.org/html/rfc4918#section-9.8.5
 			return nil
 		}
 
@@ -582,7 +595,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(log, w, delRes.Status)
+			HandleErrorStatus(ctx, log, w, delRes.Status)
 			return nil
 		}
 	} else {
@@ -595,7 +608,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 
 		if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(log, w, status)
+			HandleErrorStatus(ctx, log, w, status)
 			return nil
 		}
 		intStatReq := &provider.StatRequest{Ref: intermediateRef}
@@ -611,7 +624,7 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 				log.Debug().Interface("parent", intermediateRef).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(log, w, srcStatRes.Status)
+				HandleErrorStatus(ctx, log, w, srcStatRes.Status)
 			}
 			return nil
 		}
@@ -622,6 +635,9 @@ func (s *svc) prepareCopy(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "extractOverwrite")
+	defer span.End()
+
 	overwrite := r.Header.Get(HeaderOverwrite)
 	overwrite = strings.ToUpper(overwrite)
 	if overwrite == "" {
@@ -636,6 +652,9 @@ func extractOverwrite(w http.ResponseWriter, r *http.Request) (string, error) {
 }
 
 func extractDepth(w http.ResponseWriter, r *http.Request) (string, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "extractDepth")
+	defer span.End()
+
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "infinity"

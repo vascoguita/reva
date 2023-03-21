@@ -35,12 +35,16 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateOCMShare")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		return &ocm.CreateOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -56,7 +60,10 @@ func (s *svc) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest
 }
 
 func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveOCMShare")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		return &ocm.RemoveOCMShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -75,11 +82,17 @@ func (s *svc) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest
 // If there are any inconsistencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
 func (s *svc) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMShare")
+	defer span.End()
+
 	return s.getOCMShare(ctx, req)
 }
 
 func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getOCMShare")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetOCMShareResponse{
@@ -96,7 +109,7 @@ func (s *svc) getOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*oc
 }
 
 func (s *svc) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareByTokenRequest) (*ocm.GetOCMShareByTokenResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 	}
@@ -111,7 +124,10 @@ func (s *svc) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareByToke
 
 // TODO(labkode): read GetShare comment.
 func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListOCMShares")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListOCMSharesResponse{
@@ -128,7 +144,10 @@ func (s *svc) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) 
 }
 
 func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateOCMShare")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateOCMShareResponse{
@@ -145,7 +164,10 @@ func (s *svc) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest
 }
 
 func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "IsProviderAllowed")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.ListReceivedOCMSharesResponse{
@@ -162,8 +184,11 @@ func (s *svc) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOC
 }
 
 func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedOCMShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.UpdateReceivedOCMShareResponse{
@@ -219,7 +244,7 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 					panic("gateway: error updating a received share: the share is nil")
 				}
 
-				if isTransferShare(share) {
+				if isTransferShare(ctx, share) {
 					srcIdp := share.GetOwner().GetIdp()
 					meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 						Domain: srcIdp,
@@ -391,13 +416,16 @@ func (s *svc) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceive
 	return res, nil
 }
 
-func isTransferShare(s *ocm.ReceivedShare) bool {
-	_, ok := getTransferProtocol(s)
+func isTransferShare(ctx context.Context, s *ocm.ReceivedShare) bool {
+	_, ok := getTransferProtocol(ctx, s)
 	return ok
 }
 
 func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
-	c, err := pool.GetOCMShareProviderClient(pool.Endpoint(s.c.OCMShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedOCMShare")
+	defer span.End()
+
+	c, err := pool.GetOCMShareProviderClient(ctx, pool.Endpoint(s.c.OCMShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetOCMShareProviderClient")
 		return &ocm.GetReceivedOCMShareResponse{
@@ -413,7 +441,10 @@ func (s *svc) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMSh
 	return res, nil
 }
 
-func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
+func getTransferProtocol(ctx context.Context, share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getTransferProtocol")
+	defer span.End()
+
 	for _, p := range share.Protocols {
 		if d, ok := p.Term.(*ocm.Protocol_TransferOptions); ok {
 			return d.TransferOptions, true
@@ -423,9 +454,12 @@ func getTransferProtocol(share *ocm.ReceivedShare) (*ocm.TransferProtocol, bool)
 }
 
 func (s *svc) createOCMReference(ctx context.Context, share *ocm.ReceivedShare) (*rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createOCMReference")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
-	d, _ := getTransferProtocol(share)
+	d, _ := getTransferProtocol(ctx, share)
 
 	homeRes, err := s.GetHome(ctx, &provider.GetHomeRequest{})
 	if err != nil {

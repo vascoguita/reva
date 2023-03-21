@@ -26,11 +26,15 @@ import (
 	collaboration "github.com/cs3org/go-cs3apis/cs3/sharing/collaboration/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
-func receivedShareScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func receivedShareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "receivedShareScope")
+	defer span.End()
+
 	var share collaboration.ReceivedShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {

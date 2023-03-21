@@ -23,9 +23,13 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "helloworld"
+const tracerName = "helloworld"
 
 func init() {
 	global.Register("helloworld", New)
@@ -64,6 +68,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf *config
 }
 
@@ -77,6 +82,9 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Helloword Service HTTP Handler")
+		defer span.End()
+
 		log := appctx.GetLogger(r.Context())
 		if _, err := w.Write([]byte(s.conf.HelloMessage)); err != nil {
 			log.Err(err).Msg("error writing response")

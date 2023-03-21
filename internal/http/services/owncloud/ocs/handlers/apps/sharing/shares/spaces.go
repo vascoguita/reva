@@ -34,13 +34,17 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
 
 func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getGrantee")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		return provider.Grantee{}, err
 	}
@@ -72,8 +76,10 @@ func (h *Handler) getGrantee(ctx context.Context, name string) (provider.Grantee
 }
 
 func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "addSpaceMember")
+	defer span.End()
 
+	ctx := r.Context()
 	shareWith := r.FormValue("shareWith")
 	if shareWith == "" {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
@@ -94,7 +100,7 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 		return
 	}
 
-	providerClient, err := h.getStorageProviderClient(providers[0])
+	providerClient, err := h.getStorageProviderClient(ctx, providers[0])
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
 		return
@@ -116,8 +122,10 @@ func (h *Handler) addSpaceMember(w http.ResponseWriter, r *http.Request, info *p
 }
 
 func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "removeSpaceMember")
+	defer span.End()
 
+	ctx := r.Context()
 	shareWith := r.URL.Query().Get("shareWith")
 	if shareWith == "" {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "missing shareWith", nil)
@@ -142,7 +150,7 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 		return
 	}
 
-	providerClient, err := h.getStorageProviderClient(providers[0])
+	providerClient, err := h.getStorageProviderClient(ctx, providers[0])
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "error getting storage provider", err)
 		return
@@ -166,8 +174,11 @@ func (h *Handler) removeSpaceMember(w http.ResponseWriter, r *http.Request, spac
 	response.WriteOCSSuccess(w, r, nil)
 }
 
-func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+func (h *Handler) getStorageProviderClient(ctx context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getStorageProviderClient")
+	defer span.End()
+
+	c, err := pool.GetStorageProviderServiceClient(ctx, pool.Endpoint(p.Address))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -177,7 +188,10 @@ func (h *Handler) getStorageProviderClient(p *registry.ProviderInfo) (provider.P
 }
 
 func (h *Handler) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(h.storageRegistryAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "findProviders")
+	defer span.End()
+
+	c, err := pool.GetStorageRegistryClient(ctx, pool.Endpoint(h.storageRegistryAddr))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}

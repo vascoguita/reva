@@ -27,15 +27,20 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "appregistry"
+const tracerName = "appregistry"
+
 func init() {
-	rgrpc.Register("appregistry", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type svc struct {
+	tracing.GrpcMiddleware
 	reg app.Registry
 }
 
@@ -98,6 +103,9 @@ func getRegistry(c *config) (app.Registry, error) {
 }
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvidersRequest) (*registrypb.GetAppProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppProviders")
+	defer span.End()
+
 	p, err := s.reg.FindProviders(ctx, req.ResourceInfo.MimeType)
 	if err != nil {
 		return &registrypb.GetAppProvidersResponse{
@@ -113,6 +121,9 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registrypb.GetAppProvide
 }
 
 func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProviderRequest) (*registrypb.AddAppProviderResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddAppProvider")
+	defer span.End()
+
 	err := s.reg.AddProvider(ctx, req.Provider)
 	if err != nil {
 		return &registrypb.AddAppProviderResponse{
@@ -127,6 +138,9 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registrypb.AddAppProvider
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvidersRequest) (*registrypb.ListAppProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAppProviders")
+	defer span.End()
+
 	providers, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAppProvidersResponse{
@@ -142,6 +156,9 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registrypb.ListAppProvi
 }
 
 func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSupportedMimeTypesRequest) (*registrypb.ListSupportedMimeTypesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListSupportedMimeTypes")
+	defer span.End()
+
 	mimeTypes, err := s.reg.ListSupportedMimeTypes(ctx)
 	if err != nil {
 		return &registrypb.ListSupportedMimeTypesResponse{
@@ -164,6 +181,9 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registrypb.ListSu
 }
 
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.GetDefaultAppProviderForMimeTypeRequest) (*registrypb.GetDefaultAppProviderForMimeTypeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetDefaultAppProviderForMimeType")
+	defer span.End()
+
 	provider, err := s.reg.GetDefaultProviderForMimeType(ctx, req.MimeType)
 	if err != nil {
 		return &registrypb.GetDefaultAppProviderForMimeTypeResponse{
@@ -179,6 +199,9 @@ func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 }
 
 func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registrypb.SetDefaultAppProviderForMimeTypeRequest) (*registrypb.SetDefaultAppProviderForMimeTypeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetDefaultAppProviderForMimeType")
+	defer span.End()
+
 	err := s.reg.SetDefaultProviderForMimeType(ctx, req.MimeType, req.Provider)
 	if err != nil {
 		return &registrypb.SetDefaultAppProviderForMimeTypeResponse{

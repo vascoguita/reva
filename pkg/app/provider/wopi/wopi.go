@@ -524,7 +524,7 @@ func getPathForExternalLink(ctx context.Context, scopes map[string]*authpb.Scope
 		return "", errors.New("Either one public xor OCM share is supported, lookups not implemented")
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC("")))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(sharedconf.GetGatewaySVC("")))
 	if err != nil {
 		return "", err
 	}

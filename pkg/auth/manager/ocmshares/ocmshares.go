@@ -23,7 +23,6 @@ import (
 
 	provider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	ocminvite "github.com/cs3org/go-cs3apis/cs3/ocm/invite/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -46,8 +45,7 @@ func init() {
 }
 
 type manager struct {
-	c  *config
-	gw gateway.GatewayAPIClient
+	c *config
 }
 
 type config struct {
@@ -76,18 +74,16 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 	c.init()
 	m.c = &c
 
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewayAddr))
-	if err != nil {
-		return err
-	}
-	m.gw = gw
-
 	return nil
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.User, map[string]*authpb.Scope, error) {
 	log := appctx.GetLogger(ctx).With().Str("token", token).Logger()
-	shareRes, err := m.gw.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(m.c.GatewayAddr))
+	if err != nil {
+		return nil, nil, err
+	}
+	shareRes, err := client.GetOCMShareByToken(ctx, &ocm.GetOCMShareByTokenRequest{
 		Token: token,
 	})
 
@@ -124,7 +120,7 @@ func (m *manager) Authenticate(ctx context.Context, token, _ string) (*userpb.Us
 		},
 	}
 
-	userRes, err := m.gw.GetAcceptedUser(ctx, &ocminvite.GetAcceptedUserRequest{
+	userRes, err := client.GetAcceptedUser(ctx, &ocminvite.GetAcceptedUserRequest{
 		RemoteUserId: u,
 		Opaque:       o,
 	})

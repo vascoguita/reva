@@ -33,11 +33,15 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
 func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "publicshareScope")
+	defer span.End()
+
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -95,6 +99,9 @@ func publicshareScope(ctx context.Context, scope *authpb.Scope, resource interfa
 }
 
 func checkStorageRef(ctx context.Context, s *link.PublicShare, r *provider.Reference) bool {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "checkStorageRef")
+	defer span.End()
+
 	// r: <resource_id:<storage_id:$storageID opaque_id:$opaqueID> >
 	// OR
 	// r: <resource_id:<storage_id:$public-storage-mount-ID opaque_id:$token/$relative-path> >

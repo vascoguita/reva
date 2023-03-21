@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -31,10 +32,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const tracerName = "log"
+
 // NewUnary returns a new unary interceptor
 // that logs grpc calls.
 func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "log UnaryServerInterceptor")
+		defer span.End()
 		start := time.Now()
 		res, err := handler(ctx, req)
 		code := status.Code(err)
@@ -75,6 +80,9 @@ func NewUnary() grpc.UnaryServerInterceptor {
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "log StreamServerInterceptor")
+		defer span.End()
+
 		start := time.Now()
 		err := handler(srv, ss)
 		end := time.Now()

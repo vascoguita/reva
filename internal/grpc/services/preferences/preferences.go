@@ -27,10 +27,13 @@ import (
 	"github.com/cs3org/reva/pkg/preferences/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "preferences"
 
 func init() {
 	rgrpc.Register("preferences", New)
@@ -48,6 +51,7 @@ func (c *config) init() {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf *config
 	pm   preferences.Manager
 }
@@ -101,6 +105,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) (*preferencespb.SetKeyResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetKey")
+	defer span.End()
+
 	err := s.pm.SetKey(ctx, req.Key.Key, req.Key.Namespace, req.Val)
 	if err != nil {
 		return &preferencespb.SetKeyResponse{
@@ -114,6 +121,9 @@ func (s *service) SetKey(ctx context.Context, req *preferencespb.SetKeyRequest) 
 }
 
 func (s *service) GetKey(ctx context.Context, req *preferencespb.GetKeyRequest) (*preferencespb.GetKeyResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetKey")
+	defer span.End()
+
 	val, err := s.pm.GetKey(ctx, req.Key.Key, req.Key.Namespace)
 	if err != nil {
 		st := status.NewInternal(ctx, err, "error retrieving key")

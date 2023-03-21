@@ -24,9 +24,13 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "wellknown"
+const tracerName = "wellknown"
 
 func init() {
 	global.Register("wellknown", New)
@@ -51,6 +55,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf    *config
 	handler http.Handler
 }
@@ -91,6 +96,9 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Wellknown Service HTTP Handler")
+		defer span.End()
+
 		log := appctx.GetLogger(r.Context())
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)

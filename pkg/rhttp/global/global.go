@@ -21,6 +21,7 @@ package global
 import (
 	"net/http"
 
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 )
 
@@ -58,4 +59,5 @@ type Service interface {
 	// middleware. To be seen if we need url-verb fine grained skip checks like
 	// GET is public and POST is not.
 	Unprotected() []string
+	tracing.HttpMiddlewarer
 }

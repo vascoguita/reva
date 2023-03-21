@@ -19,6 +19,7 @@
 package pool
 
 import (
+	"context"
 	"sync"
 
 	appprovider "github.com/cs3org/go-cs3apis/cs3/app/provider/v1beta1"
@@ -40,11 +41,12 @@ import (
 	storageprovider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	storageregistry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	datatx "github.com/cs3org/go-cs3apis/cs3/tx/v1beta1"
-	rtrace "github.com/cs3org/reva/pkg/trace"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"github.com/cs3org/reva/pkg/tracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+const tracerName = "pool"
 
 type provider struct {
 	m    sync.Mutex
@@ -83,43 +85,24 @@ var (
 )
 
 // NewConn creates a new connection to a grpc server
-// with open census tracing support.
 // TODO(labkode): make grpc tls configurable.
-func NewConn(options Options) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(
-		options.Endpoint,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize),
-		),
-		grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor(
-			otelgrpc.WithTracerProvider(
-				rtrace.Provider,
-			),
-			otelgrpc.WithPropagators(
-				rtrace.Propagator,
-			),
-		)),
-		grpc.WithUnaryInterceptor(
-			otelgrpc.UnaryClientInterceptor(
-				otelgrpc.WithTracerProvider(
-					rtrace.Provider,
-				),
-				otelgrpc.WithPropagators(
-					rtrace.Propagator,
-				),
-			),
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
+func NewConn(ctx context.Context, options Options) (*grpc.ClientConn, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "NewConn")
+	defer span.End()
 
-	return conn, nil
+	return grpc.Dial(options.Endpoint,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(options.MaxCallRecvMsgSize)),
+		grpc.WithUnaryInterceptor(tracing.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(tracing.StreamClientInterceptor()),
+	)
 }
 
 // GetGatewayServiceClient returns a GatewayServiceClient.
-func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
+func GetGatewayServiceClient(ctx context.Context, opts ...Option) (gateway.GatewayAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGatewayServiceClient")
+	defer span.End()
+
 	gatewayProviders.m.Lock()
 	defer gatewayProviders.m.Unlock()
 
@@ -128,19 +111,21 @@ func GetGatewayServiceClient(opts ...Option) (gateway.GatewayAPIClient, error) {
 		return val.(gateway.GatewayAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := gateway.NewGatewayAPIClient(conn)
 	gatewayProviders.conn[options.Endpoint] = v
-
 	return v, nil
 }
 
 // GetUserProviderServiceClient returns a UserProviderServiceClient.
-func GetUserProviderServiceClient(opts ...Option) (user.UserAPIClient, error) {
+func GetUserProviderServiceClient(ctx context.Context, opts ...Option) (user.UserAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserProviderServiceClient")
+	defer span.End()
+
 	userProviders.m.Lock()
 	defer userProviders.m.Unlock()
 
@@ -149,7 +134,7 @@ func GetUserProviderServiceClient(opts ...Option) (user.UserAPIClient, error) {
 		return val.(user.UserAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +145,10 @@ func GetUserProviderServiceClient(opts ...Option) (user.UserAPIClient, error) {
 }
 
 // GetGroupProviderServiceClient returns a GroupProviderServiceClient.
-func GetGroupProviderServiceClient(opts ...Option) (group.GroupAPIClient, error) {
+func GetGroupProviderServiceClient(ctx context.Context, opts ...Option) (group.GroupAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGroupProviderServiceClient")
+	defer span.End()
+
 	groupProviders.m.Lock()
 	defer groupProviders.m.Unlock()
 
@@ -169,7 +157,7 @@ func GetGroupProviderServiceClient(opts ...Option) (group.GroupAPIClient, error)
 		return val.(group.GroupAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +168,10 @@ func GetGroupProviderServiceClient(opts ...Option) (group.GroupAPIClient, error)
 }
 
 // GetStorageProviderServiceClient returns a StorageProviderServiceClient.
-func GetStorageProviderServiceClient(opts ...Option) (storageprovider.ProviderAPIClient, error) {
+func GetStorageProviderServiceClient(ctx context.Context, opts ...Option) (storageprovider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetStorageProviderServiceClient")
+	defer span.End()
+
 	storageProviders.m.Lock()
 	defer storageProviders.m.Unlock()
 
@@ -189,7 +180,7 @@ func GetStorageProviderServiceClient(opts ...Option) (storageprovider.ProviderAP
 		return c.(storageprovider.ProviderAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +191,10 @@ func GetStorageProviderServiceClient(opts ...Option) (storageprovider.ProviderAP
 }
 
 // GetAuthRegistryServiceClient returns a new AuthRegistryServiceClient.
-func GetAuthRegistryServiceClient(opts ...Option) (authregistry.RegistryAPIClient, error) {
+func GetAuthRegistryServiceClient(ctx context.Context, opts ...Option) (authregistry.RegistryAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAuthRegistryServiceClient")
+	defer span.End()
+
 	authRegistries.m.Lock()
 	defer authRegistries.m.Unlock()
 
@@ -211,7 +205,7 @@ func GetAuthRegistryServiceClient(opts ...Option) (authregistry.RegistryAPIClien
 	}
 
 	// if not, create a new connection
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +217,10 @@ func GetAuthRegistryServiceClient(opts ...Option) (authregistry.RegistryAPIClien
 }
 
 // GetAuthProviderServiceClient returns a new AuthProviderServiceClient.
-func GetAuthProviderServiceClient(opts ...Option) (authprovider.ProviderAPIClient, error) {
+func GetAuthProviderServiceClient(ctx context.Context, opts ...Option) (authprovider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAuthProviderServiceClient")
+	defer span.End()
+
 	authProviders.m.Lock()
 	defer authProviders.m.Unlock()
 
@@ -232,7 +229,7 @@ func GetAuthProviderServiceClient(opts ...Option) (authprovider.ProviderAPIClien
 		return c.(authprovider.ProviderAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +240,10 @@ func GetAuthProviderServiceClient(opts ...Option) (authprovider.ProviderAPIClien
 }
 
 // GetAppAuthProviderServiceClient returns a new AppAuthProviderServiceClient.
-func GetAppAuthProviderServiceClient(opts ...Option) (applicationauth.ApplicationsAPIClient, error) {
+func GetAppAuthProviderServiceClient(ctx context.Context, opts ...Option) (applicationauth.ApplicationsAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppAuthProviderServiceClient")
+	defer span.End()
+
 	appAuthProviders.m.Lock()
 	defer appAuthProviders.m.Unlock()
 
@@ -252,7 +252,7 @@ func GetAppAuthProviderServiceClient(opts ...Option) (applicationauth.Applicatio
 		return c.(applicationauth.ApplicationsAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,10 @@ func GetAppAuthProviderServiceClient(opts ...Option) (applicationauth.Applicatio
 }
 
 // GetUserShareProviderClient returns a new UserShareProviderClient.
-func GetUserShareProviderClient(opts ...Option) (collaboration.CollaborationAPIClient, error) {
+func GetUserShareProviderClient(ctx context.Context, opts ...Option) (collaboration.CollaborationAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserShareProviderClient")
+	defer span.End()
+
 	userShareProviders.m.Lock()
 	defer userShareProviders.m.Unlock()
 
@@ -272,7 +275,7 @@ func GetUserShareProviderClient(opts ...Option) (collaboration.CollaborationAPIC
 		return c.(collaboration.CollaborationAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +286,10 @@ func GetUserShareProviderClient(opts ...Option) (collaboration.CollaborationAPIC
 }
 
 // GetOCMShareProviderClient returns a new OCMShareProviderClient.
-func GetOCMShareProviderClient(opts ...Option) (ocm.OcmAPIClient, error) {
+func GetOCMShareProviderClient(ctx context.Context, opts ...Option) (ocm.OcmAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMShareProviderClient")
+	defer span.End()
+
 	ocmShareProviders.m.Lock()
 	defer ocmShareProviders.m.Unlock()
 
@@ -292,18 +298,21 @@ func GetOCMShareProviderClient(opts ...Option) (ocm.OcmAPIClient, error) {
 		return c.(ocm.OcmAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
 
 	v := ocm.NewOcmAPIClient(conn)
-	ocmShareProviders.conn[options.Endpoint] = v
+	// ocmShareProviders.conn[options.Endpoint] = v
 	return v, nil
 }
 
 // GetOCMInviteManagerClient returns a new OCMInviteManagerClient.
-func GetOCMInviteManagerClient(opts ...Option) (invitepb.InviteAPIClient, error) {
+func GetOCMInviteManagerClient(ctx context.Context, opts ...Option) (invitepb.InviteAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMInviteManagerClient")
+	defer span.End()
+
 	ocmInviteManagers.m.Lock()
 	defer ocmInviteManagers.m.Unlock()
 
@@ -312,7 +321,7 @@ func GetOCMInviteManagerClient(opts ...Option) (invitepb.InviteAPIClient, error)
 		return c.(invitepb.InviteAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +332,10 @@ func GetOCMInviteManagerClient(opts ...Option) (invitepb.InviteAPIClient, error)
 }
 
 // GetPublicShareProviderClient returns a new PublicShareProviderClient.
-func GetPublicShareProviderClient(opts ...Option) (link.LinkAPIClient, error) {
+func GetPublicShareProviderClient(ctx context.Context, opts ...Option) (link.LinkAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShareProviderClient")
+	defer span.End()
+
 	publicShareProviders.m.Lock()
 	defer publicShareProviders.m.Unlock()
 
@@ -332,7 +344,7 @@ func GetPublicShareProviderClient(opts ...Option) (link.LinkAPIClient, error) {
 		return c.(link.LinkAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +355,10 @@ func GetPublicShareProviderClient(opts ...Option) (link.LinkAPIClient, error) {
 }
 
 // GetPreferencesClient returns a new PreferencesClient.
-func GetPreferencesClient(opts ...Option) (preferences.PreferencesAPIClient, error) {
+func GetPreferencesClient(ctx context.Context, opts ...Option) (preferences.PreferencesAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPreferencesClient")
+	defer span.End()
+
 	preferencesProviders.m.Lock()
 	defer preferencesProviders.m.Unlock()
 
@@ -352,7 +367,7 @@ func GetPreferencesClient(opts ...Option) (preferences.PreferencesAPIClient, err
 		return c.(preferences.PreferencesAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +378,10 @@ func GetPreferencesClient(opts ...Option) (preferences.PreferencesAPIClient, err
 }
 
 // GetPermissionsClient returns a new PermissionsClient.
-func GetPermissionsClient(opts ...Option) (permissions.PermissionsAPIClient, error) {
+func GetPermissionsClient(ctx context.Context, opts ...Option) (permissions.PermissionsAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPermissionsClient")
+	defer span.End()
+
 	permissionsProviders.m.Lock()
 	defer permissionsProviders.m.Unlock()
 
@@ -372,7 +390,7 @@ func GetPermissionsClient(opts ...Option) (permissions.PermissionsAPIClient, err
 		return c.(permissions.PermissionsAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +401,10 @@ func GetPermissionsClient(opts ...Option) (permissions.PermissionsAPIClient, err
 }
 
 // GetAppRegistryClient returns a new AppRegistryClient.
-func GetAppRegistryClient(opts ...Option) (appregistry.RegistryAPIClient, error) {
+func GetAppRegistryClient(ctx context.Context, opts ...Option) (appregistry.RegistryAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppRegistryClient")
+	defer span.End()
+
 	appRegistries.m.Lock()
 	defer appRegistries.m.Unlock()
 
@@ -392,7 +413,7 @@ func GetAppRegistryClient(opts ...Option) (appregistry.RegistryAPIClient, error)
 		return c.(appregistry.RegistryAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +424,10 @@ func GetAppRegistryClient(opts ...Option) (appregistry.RegistryAPIClient, error)
 }
 
 // GetAppProviderClient returns a new AppRegistryClient.
-func GetAppProviderClient(opts ...Option) (appprovider.ProviderAPIClient, error) {
+func GetAppProviderClient(ctx context.Context, opts ...Option) (appprovider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppProviderClient")
+	defer span.End()
+
 	appProviders.m.Lock()
 	defer appProviders.m.Unlock()
 
@@ -412,7 +436,7 @@ func GetAppProviderClient(opts ...Option) (appprovider.ProviderAPIClient, error)
 		return c.(appprovider.ProviderAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +447,10 @@ func GetAppProviderClient(opts ...Option) (appprovider.ProviderAPIClient, error)
 }
 
 // GetStorageRegistryClient returns a new StorageRegistryClient.
-func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient, error) {
+func GetStorageRegistryClient(ctx context.Context, opts ...Option) (storageregistry.RegistryAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetStorageRegistryClient")
+	defer span.End()
+
 	storageRegistries.m.Lock()
 	defer storageRegistries.m.Unlock()
 
@@ -432,7 +459,7 @@ func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient
 		return c.(storageregistry.RegistryAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +470,10 @@ func GetStorageRegistryClient(opts ...Option) (storageregistry.RegistryAPIClient
 }
 
 // GetOCMProviderAuthorizerClient returns a new OCMProviderAuthorizerClient.
-func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClient, error) {
+func GetOCMProviderAuthorizerClient(ctx context.Context, opts ...Option) (ocmprovider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMProviderAuthorizerClient")
+	defer span.End()
+
 	ocmProviderAuthorizers.m.Lock()
 	defer ocmProviderAuthorizers.m.Unlock()
 
@@ -452,7 +482,7 @@ func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClie
 		return c.(ocmprovider.ProviderAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +493,10 @@ func GetOCMProviderAuthorizerClient(opts ...Option) (ocmprovider.ProviderAPIClie
 }
 
 // GetOCMCoreClient returns a new OCMCoreClient.
-func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
+func GetOCMCoreClient(ctx context.Context, opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMCoreClient")
+	defer span.End()
+
 	ocmCores.m.Lock()
 	defer ocmCores.m.Unlock()
 
@@ -472,7 +505,7 @@ func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
 		return c.(ocmcore.OcmCoreAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +516,10 @@ func GetOCMCoreClient(opts ...Option) (ocmcore.OcmCoreAPIClient, error) {
 }
 
 // GetDataTxClient returns a new DataTxClient.
-func GetDataTxClient(opts ...Option) (datatx.TxAPIClient, error) {
+func GetDataTxClient(ctx context.Context, opts ...Option) (datatx.TxAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetDataTxClient")
+	defer span.End()
+
 	dataTxs.m.Lock()
 	defer dataTxs.m.Unlock()
 
@@ -492,7 +528,7 @@ func GetDataTxClient(opts ...Option) (datatx.TxAPIClient, error) {
 		return c.(datatx.TxAPIClient), nil
 	}
 
-	conn, err := NewConn(options)
+	conn, err := NewConn(ctx, options)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // AvatarsHandler handles avatar requests.
@@ -37,6 +38,9 @@ func (h *AvatarsHandler) init(c *Config) error {
 // Handler handles requests.
 func (h *AvatarsHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Avatars HTTP Handler")
+		defer span.End()
+
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 

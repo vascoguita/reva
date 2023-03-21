@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -29,15 +28,16 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "move")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathMove")
 	defer span.End()
 
+	ctx := r.Context()
 	srcPath := path.Join(ns, r.URL.Path)
 	dstPath, err := extractDestination(r)
 	if err != nil {
@@ -63,13 +63,14 @@ func (s *svc) handlePathMove(w http.ResponseWriter, r *http.Request, ns string) 
 		ref := &provider.Reference{Path: intermediateDir}
 		return ref, &rpc.Status{Code: rpc.Code_CODE_OK}, nil
 	}
-	s.handleMove(ctx, w, r, src, dst, intermediateDirRefFunc, sublog)
+	s.handleMove(w, r, src, dst, intermediateDirRefFunc, sublog)
 }
 
 func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_move")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesMove")
 	defer span.End()
 
+	ctx := r.Context()
 	dst, err := extractDestination(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -86,7 +87,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
@@ -101,7 +102,7 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
@@ -109,10 +110,14 @@ func (s *svc) handleSpacesMove(w http.ResponseWriter, r *http.Request, srcSpaceI
 		intermediateDir := path.Dir(dstRelPath)
 		return s.lookUpStorageSpaceReference(ctx, dstSpaceID, intermediateDir)
 	}
-	s.handleMove(ctx, w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
+	s.handleMove(w, r, srcRef, dstRef, intermediateDirRefFunc, sublog)
 }
 
-func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, intermediateDirRef intermediateDirRefFunc, log zerolog.Logger) {
+func (s *svc) handleMove(w http.ResponseWriter, r *http.Request, src, dst *provider.Reference, intermediateDirRef intermediateDirRefFunc, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleMove")
+	defer span.End()
+
+	ctx := r.Context()
 	overwrite := r.Header.Get(HeaderOverwrite)
 	log.Debug().Str("overwrite", overwrite).Msg("move")
 
@@ -126,7 +131,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -149,9 +154,9 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 				code:    SabredavNotFound,
 				message: m,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		}
-		HandleErrorStatus(&log, w, srcStatRes.Status)
+		HandleErrorStatus(ctx, &log, w, srcStatRes.Status)
 		return
 	}
 
@@ -164,7 +169,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, srcStatRes.Status)
+		HandleErrorStatus(ctx, &log, w, srcStatRes.Status)
 		return
 	}
 
@@ -188,7 +193,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&log, w, delRes.Status)
+			HandleErrorStatus(ctx, &log, w, delRes.Status)
 			return
 		}
 	} else {
@@ -199,7 +204,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		} else if status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(&log, w, status)
+			HandleErrorStatus(ctx, &log, w, status)
 			return
 		}
 
@@ -216,7 +221,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 				log.Debug().Interface("parent", dst).Interface("status", intStatRes.Status).Msg("conflict")
 				w.WriteHeader(http.StatusConflict)
 			} else {
-				HandleErrorStatus(&log, w, intStatRes.Status)
+				HandleErrorStatus(ctx, &log, w, intStatRes.Status)
 			}
 			return
 		}
@@ -239,9 +244,9 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 				code:    SabredavPermissionDenied,
 				message: m,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		}
-		HandleErrorStatus(&log, w, mRes.Status)
+		HandleErrorStatus(ctx, &log, w, mRes.Status)
 		return
 	}
 
@@ -253,7 +258,7 @@ func (s *svc) handleMove(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, dstStatRes.Status)
+		HandleErrorStatus(ctx, &log, w, dstStatRes.Status)
 		return
 	}
 

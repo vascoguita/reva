@@ -27,7 +27,7 @@ import (
 	typesv1beta1 "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // PublicFileHandler handles requests on a shared file. it needs to be wrapped in a collection.
@@ -43,7 +43,11 @@ func (h *PublicFileHandler) init(ns string) error {
 // Handler handles requests.
 func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "PublicFile HTTP Handler")
+		defer span.End()
+
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 		_, relativePath := router.ShiftPath(r.URL.Path)
 
 		log.Debug().Str("relativePath", relativePath).Msg("PublicFileHandler func")
@@ -86,14 +90,15 @@ func (h *PublicFileHandler) Handler(s *svc) http.Handler {
 }
 
 func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bool {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "adjustResourcePathInURL")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "adjustResourcePathInURL")
 	defer span.End()
 
+	ctx := r.Context()
 	// find actual file name
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -108,7 +113,7 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, pathRes.Status)
 		return false
 	}
 	if path.Base(r.URL.Path) != path.Base(pathRes.Path) {
@@ -125,9 +130,10 @@ func (s *svc) adjustResourcePathInURL(w http.ResponseWriter, r *http.Request) bo
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns string, onContainer bool) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "token_propfind")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePropfindOnToken")
 	defer span.End()
 
+	ctx := r.Context()
 	tokenStatInfo := ctx.Value(tokenStatInfoKey{}).(*provider.ResourceInfo)
 	sublog := appctx.GetLogger(ctx).With().Interface("tokenStatInfo", tokenStatInfo).Logger()
 	sublog.Debug().Msg("handlePropfindOnToken")
@@ -151,7 +157,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -168,7 +174,7 @@ func (s *svc) handlePropfindOnToken(w http.ResponseWriter, r *http.Request, ns s
 		return
 	}
 	if pathRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, pathRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, pathRes.Status)
 		return
 	}
 

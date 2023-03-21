@@ -26,6 +26,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	storageProvider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 )
 
@@ -44,6 +45,8 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// ctx := r.Context()
 		// log := appctx.GetLogger(ctx)
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Spaces HTTP Handler")
+		defer span.End()
 
 		if r.Method == http.MethodOptions {
 			s.handleOptions(w, r)
@@ -95,8 +98,11 @@ func (h *SpacesHandler) Handler(s *svc) http.Handler {
 }
 
 func (s *svc) lookUpStorageSpaceReference(ctx context.Context, spaceID string, relativePath string) (*storageProvider.Reference, *rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "lookUpStorageSpaceReference")
+	defer span.End()
+
 	// Get the getway client
-	gatewayClient, err := s.getClient()
+	gatewayClient, err := s.getClient(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

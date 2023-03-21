@@ -29,6 +29,7 @@ import (
 	"github.com/cs3org/reva/pkg/metrics"
 	"github.com/cs3org/reva/pkg/metrics/config"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
@@ -37,9 +38,8 @@ func init() {
 	global.Register(serviceName, New)
 }
 
-const (
-	serviceName = "metrics"
-)
+const serviceName = "metrics"
+const tracerName = "metrics"
 
 // Close is called when this service is being stopped.
 func (s *svc) Close() error {
@@ -61,6 +61,9 @@ func (s *svc) Unprotected() []string {
 // Handler serves all HTTP requests.
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Metrics Service HTTP Handler")
+		defer span.End()
+
 		log := logger.New().With().Int("pid", os.Getpid()).Logger()
 		if _, err := w.Write([]byte("This is the metrics service.\n")); err != nil {
 			log.Error().Err(err).Msg("error writing metrics response")
@@ -90,4 +93,5 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 }

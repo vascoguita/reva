@@ -27,10 +27,14 @@ import (
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "reverseproxy"
+const tracerName = "reverseproxy"
 
 func init() {
 	global.Register("reverseproxy", New)
@@ -52,6 +56,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	router *chi.Mux
 }
 
@@ -114,6 +119,9 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Reverseproxy Service HTTP Handler")
+		defer span.End()
+
 		s.router.ServeHTTP(w, r)
 	})
 }

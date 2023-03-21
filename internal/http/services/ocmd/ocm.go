@@ -19,15 +19,20 @@
 package ocmd
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "ocmd"
+const tracerName = "ocmd"
 
 func init() {
 	global.Register("ocmd", New)
@@ -49,6 +54,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	Conf   *config
 	router chi.Router
 }
@@ -56,6 +62,9 @@ type svc struct {
 // New returns a new ocmd object, that implements
 // the OCM APIs specified in https://cs3org.github.io/OCM-API/docs.html
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -68,25 +77,23 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(ctx); err != nil {
 		return nil, err
 	}
 
 	return s, nil
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(ctx context.Context) error {
 	configHandler := new(configHandler)
 	sharesHandler := new(sharesHandler)
 	notificationsHandler := new(notificationsHandler)
 	invitesHandler := new(invitesHandler)
 
 	configHandler.init(s.Conf)
-	if err := sharesHandler.init(s.Conf); err != nil {
-		return err
-	}
+	sharesHandler.init(s.Conf)
 	notificationsHandler.init(s.Conf)
-	if err := invitesHandler.init(s.Conf); err != nil {
+	if err := invitesHandler.init(ctx, s.Conf); err != nil {
 		return err
 	}
 

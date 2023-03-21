@@ -24,7 +24,10 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/config"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "ocs"
 
 // Handler renders the config endpoint.
 type Handler struct {
@@ -54,5 +57,8 @@ func (h *Handler) Init(c *config.Config) {
 
 // GetConfig renders the config.
 func (h *Handler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetConfig")
+	defer span.End()
+
 	response.WriteOCSSuccess(w, r, h.c)
 }

@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	ocmpb "github.com/cs3org/go-cs3apis/cs3/sharing/ocm/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
@@ -50,8 +49,7 @@ func init() {
 }
 
 type driver struct {
-	c       *config
-	gateway gateway.GatewayAPIClient
+	c *config
 }
 
 type config struct {
@@ -76,14 +74,8 @@ func New(c map[string]interface{}) (storage.FS, error) {
 	}
 	conf.init()
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySVC))
-	if err != nil {
-		return nil, err
-	}
-
 	d := &driver{
-		c:       conf,
-		gateway: gateway,
+		c: conf,
 	}
 
 	return d, nil
@@ -112,8 +104,12 @@ func shareInfoFromReference(ref *provider.Reference) (*ocmpb.ShareId, string) {
 }
 
 func (d *driver) getWebDAVFromShare(ctx context.Context, shareID *ocmpb.ShareId) (*ocmpb.ReceivedShare, string, string, error) {
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(d.c.GatewaySVC))
+	if err != nil {
+		return nil, "", "", err
+	}
 	// TODO: we may want to cache the share
-	res, err := d.gateway.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
+	res, err := client.GetReceivedOCMShare(ctx, &ocmpb.GetReceivedOCMShareRequest{
 		Ref: &ocmpb.ShareReference{
 			Spec: &ocmpb.ShareReference_Id{
 				Id: shareID,

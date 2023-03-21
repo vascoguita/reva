@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -27,14 +26,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "mkcol")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathMkcol")
 	defer span.End()
 
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 	for _, r := range nameRules {
 		if !r.Test(fn) {
@@ -47,13 +47,14 @@ func (s *svc) handlePathMkcol(w http.ResponseWriter, r *http.Request, ns string)
 	parentRef := &provider.Reference{Path: path.Dir(fn)}
 	childRef := &provider.Reference{Path: fn}
 
-	s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
+	s.handleMkcol(w, r, parentRef, childRef, sublog)
 }
 
 func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_mkcol")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesMkCol")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "mkcol").Logger()
 
 	parentRef, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, path.Dir(r.URL.Path))
@@ -64,7 +65,7 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
 
@@ -76,20 +77,24 @@ func (s *svc) handleSpacesMkCol(w http.ResponseWriter, r *http.Request, spaceID 
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
 
-	s.handleMkcol(ctx, w, r, parentRef, childRef, sublog)
+	s.handleMkcol(w, r, parentRef, childRef, sublog)
 }
 
-func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) {
+func (s *svc) handleMkcol(w http.ResponseWriter, r *http.Request, parentRef, childRef *provider.Reference, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleMkcol")
+	defer span.End()
+
+	ctx := r.Context()
 	if r.Body != http.NoBody {
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -116,9 +121,9 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 				code:    SabredavNotFound,
 				message: "Parent node does not exist",
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		} else {
-			HandleErrorStatus(&log, w, parentStatRes.Status)
+			HandleErrorStatus(ctx, &log, w, parentStatRes.Status)
 		}
 		return
 	}
@@ -139,9 +144,9 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 				code:    SabredavMethodNotAllowed,
 				message: "The resource you tried to create already exists",
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		} else {
-			HandleErrorStatus(&log, w, statRes.Status)
+			HandleErrorStatus(ctx, &log, w, statRes.Status)
 		}
 		return
 	}
@@ -167,8 +172,8 @@ func (s *svc) handleMkcol(ctx context.Context, w http.ResponseWriter, r *http.Re
 			code:    SabredavPermissionDenied,
 			message: m,
 		})
-		HandleWebdavError(&log, w, b, err)
+		HandleWebdavError(ctx, &log, w, b, err)
 	default:
-		HandleErrorStatus(&log, w, res.Status)
+		HandleErrorStatus(ctx, &log, w, res.Status)
 	}
 }

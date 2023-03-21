@@ -39,7 +39,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/etag"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -55,7 +55,10 @@ type transferClaims struct {
 	Target string `json:"target"`
 }
 
-func (s *svc) sign(_ context.Context, target string) (string, error) {
+func (s *svc) sign(ctx context.Context, target string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "sign")
+	defer span.End()
+
 	// Tus sends a separate request to the datagateway service for every chunk.
 	// For large files, this can take a long time, so we extend the expiration
 	ttl := time.Duration(s.c.TransferExpires) * time.Second
@@ -79,6 +82,9 @@ func (s *svc) sign(_ context.Context, target string) (string, error) {
 }
 
 func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	home := s.getHome(ctx)
@@ -100,6 +106,9 @@ func (s *svc) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (
 }
 
 func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
 	c, err := s.findByPath(ctx, "/users")
@@ -120,6 +129,9 @@ func (s *svc) CreateStorageSpace(ctx context.Context, req *provider.CreateStorag
 }
 
 func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	var id *provider.StorageSpaceId
 	for _, f := range req.Filters {
@@ -132,7 +144,7 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 		providers []*registry.ProviderInfo
 		err       error
 	)
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	c, err := pool.GetStorageRegistryClient(ctx, pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -231,6 +243,9 @@ func (s *svc) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSp
 }
 
 func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.ListStorageSpacesRequest, res *[]*provider.StorageSpace, p *registry.ProviderInfo, e *error, wg *sync.WaitGroup) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listStorageSpacesOnProvider")
+	defer span.End()
+
 	defer wg.Done()
 	c, err := s.getStorageProviderClient(ctx, p)
 	if err != nil {
@@ -248,6 +263,9 @@ func (s *svc) listStorageSpacesOnProvider(ctx context.Context, req *provider.Lis
 }
 
 func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
 	c, err := s.find(ctx, &provider.Reference{ResourceId: req.StorageSpace.Root})
@@ -268,6 +286,9 @@ func (s *svc) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorag
 }
 
 func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DeleteStorageSpace")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	// TODO: needs to be fixed
 	storageid, opaqeid, err := utils.SplitStorageSpaceID(req.Id.OpaqueId)
@@ -297,18 +318,27 @@ func (s *svc) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorag
 }
 
 func (s *svc) GetHome(ctx context.Context, _ *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	return &provider.GetHomeResponse{
 		Path:   s.getHome(ctx),
 		Status: status.NewOK(ctx),
 	}, nil
 }
 
-func (s *svc) getHome(_ context.Context) string {
+func (s *svc) getHome(ctx context.Context) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getHome")
+	defer span.End()
+
 	// TODO(labkode): issue #601, /home will be hardcoded.
 	return "/home"
 }
 
 func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileDownload")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	if utils.IsRelativeReference(req.Ref) {
@@ -471,6 +501,9 @@ func (s *svc) InitiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*gateway.InitiateFileDownloadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "initiateFileDownload")
+	defer span.End()
+
 	// TODO(ishank011): enable downloading references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -526,6 +559,9 @@ func (s *svc) initiateFileDownload(ctx context.Context, req *provider.InitiateFi
 }
 
 func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileUpload")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if utils.IsRelativeReference(req.Ref) {
 		return s.initiateFileUpload(ctx, req)
@@ -671,6 +707,9 @@ func (s *svc) InitiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*gateway.InitiateFileUploadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "initiateFileUpload")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &gateway.InitiateFileUploadResponse{
@@ -732,6 +771,9 @@ func (s *svc) initiateFileUpload(ctx context.Context, req *provider.InitiateFile
 }
 
 func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPath")
+	defer span.End()
+
 	statReq := &provider.StatRequest{Ref: &provider.Reference{ResourceId: req.ResourceId}}
 	statRes, err := s.stat(ctx, statReq)
 	if err != nil {
@@ -752,6 +794,9 @@ func (s *svc) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provi
 }
 
 func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateContainer")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	if utils.IsRelativeReference(req.Ref) {
@@ -824,6 +869,9 @@ func (s *svc) CreateContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createContainer")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
@@ -843,6 +891,9 @@ func (s *svc) createContainer(ctx context.Context, req *provider.CreateContainer
 }
 
 func (s *svc) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
@@ -868,6 +919,9 @@ func (s *svc) inSharedFolder(ctx context.Context, p string) bool {
 }
 
 func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
@@ -876,17 +930,12 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 		}, nil
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "Delete")
-	defer span.End()
-
 	if !s.inSharedFolder(ctx, p) {
 		return s.delete(ctx, req)
 	}
 
 	if s.isSharedFolder(ctx, p) {
 		// TODO(labkode): deleting share names should be allowed, means unmounting.
-		err := errtypes.BadRequest("gateway: cannot delete share folder or share name: path=" + p)
-		span.RecordError(err)
 		return &provider.DeleteResponse{
 			Status: status.NewInvalidArg(ctx, "path points to share folder or share name"),
 		}, nil
@@ -1000,6 +1049,9 @@ func (s *svc) Delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "delete")
+	defer span.End()
+
 	// TODO(ishank011): enable deleting references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1020,6 +1072,9 @@ func (s *svc) delete(ctx context.Context, req *provider.DeleteRequest) (*provide
 }
 
 func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	p, st := s.getPath(ctx, req.Source)
 	if st.Code != rpc.Code_CODE_OK {
@@ -1135,6 +1190,9 @@ func (s *svc) Move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "move")
+	defer span.End()
+
 	srcProviders, err := s.findProviders(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
@@ -1178,6 +1236,9 @@ func (s *svc) move(ctx context.Context, req *provider.MoveRequest) (*provider.Mo
 }
 
 func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1198,6 +1259,9 @@ func (s *svc) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitra
 }
 
 func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	// TODO(ishank011): enable for references spread across storage providers, eg. /eos
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
@@ -1219,6 +1283,9 @@ func (s *svc) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArb
 
 // SetLock puts a lock on the given reference.
 func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.SetLockResponse{
@@ -1239,6 +1306,9 @@ func (s *svc) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provi
 
 // GetLock returns an existing lock on the given reference.
 func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetLockResponse{
@@ -1259,6 +1329,9 @@ func (s *svc) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provi
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RefreshLockResponse{
@@ -1279,6 +1352,9 @@ func (s *svc) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest)
 
 // Unlock removes an existing lock from the given reference.
 func (s *svc) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.UnlockResponse{
@@ -1389,13 +1465,16 @@ func (s *svc) statSharesFolder(ctx context.Context) (*provider.StatResponse, err
 }
 
 func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "stat")
+	defer span.End()
+
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.StatResponse{
 			Status: status.NewStatusFromErrType(ctx, "stat ref: "+req.Ref.String(), err),
 		}, nil
 	}
-	providers = getUniqueProviders(providers)
+	providers = s.getUniqueProviders(ctx, providers)
 
 	resPath := req.Ref.GetPath()
 	if len(providers) == 1 && (utils.IsRelativeReference(req.Ref) || resPath == "" || strings.HasPrefix(resPath, providers[0].ProviderPath)) {
@@ -1416,6 +1495,9 @@ func (s *svc) stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest, providers []*registry.ProviderInfo) (*provider.StatResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "statAcrossProviders")
+	defer span.End()
+
 	// TODO(ishank011): aggregrate properties such as etag, checksum, etc.
 	log := appctx.GetLogger(ctx)
 	info := &provider.ResourceInfo{
@@ -1465,6 +1547,9 @@ func (s *svc) statAcrossProviders(ctx context.Context, req *provider.StatRequest
 }
 
 func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Stat")
+	defer span.End()
+
 	if utils.IsRelativeReference(req.Ref) {
 		return s.stat(ctx, req)
 	}
@@ -1612,6 +1697,9 @@ func (s *svc) Stat(ctx context.Context, req *provider.StatRequest) (*provider.St
 }
 
 func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provider.ResourceInfo, string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "checkRef")
+	defer span.End()
+
 	if ri.Type != provider.ResourceType_RESOURCE_TYPE_REFERENCE {
 		panic("gateway: calling checkRef on a non reference type:" + ri.String())
 	}
@@ -1640,6 +1728,9 @@ func (s *svc) checkRef(ctx context.Context, ri *provider.ResourceInfo) (*provide
 }
 
 func (s *svc) handleCS3Ref(ctx context.Context, opaque string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "handleCS3Ref")
+	defer span.End()
+
 	// a cs3 ref has the following layout: <storage_id>/<opaque_id>
 	parts := strings.SplitN(opaque, "/", 2)
 	if len(parts) < 2 {
@@ -1768,6 +1859,9 @@ func (s *svc) listSharesFolder(ctx context.Context) (*provider.ListContainerResp
 }
 
 func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "filterProvidersByUserAgent")
+	defer span.End()
+
 	cat, ok := ctxpkg.ContextGetUserAgentCategory(ctx)
 	if !ok {
 		return providers
@@ -1775,14 +1869,17 @@ func (s *svc) filterProvidersByUserAgent(ctx context.Context, providers []*regis
 
 	filters := []*registry.ProviderInfo{}
 	for _, p := range providers {
-		if s.isPathAllowed(cat, p.ProviderPath) {
+		if s.isPathAllowed(ctx, cat, p.ProviderPath) {
 			filters = append(filters, p)
 		}
 	}
 	return filters
 }
 
-func (s *svc) isPathAllowed(cat string, path string) bool {
+func (s *svc) isPathAllowed(ctx context.Context, cat string, path string) bool {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "isPathAllowed")
+	defer span.End()
+
 	allowedUserAgents, ok := s.c.AllowedUserAgents[path]
 	if !ok {
 		// if no user agent is defined for a path, all user agents are allowed
@@ -1798,13 +1895,16 @@ func (s *svc) isPathAllowed(cat string, path string) bool {
 }
 
 func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listContainer")
+	defer span.End()
+
 	providers, err := s.findProviders(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListContainerResponse{
 			Status: status.NewStatusFromErrType(ctx, "listContainer ref: "+req.Ref.String(), err),
 		}, nil
 	}
-	providers = getUniqueProviders(providers)
+	providers = s.getUniqueProviders(ctx, providers)
 
 	resPath := req.Ref.GetPath()
 
@@ -1826,6 +1926,9 @@ func (s *svc) listContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.ListContainerRequest, providers []*registry.ProviderInfo) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listContainerAcrossProviders")
+	defer span.End()
+
 	nestedInfos := make(map[string]*provider.ResourceInfo)
 	log := appctx.GetLogger(ctx)
 
@@ -1883,6 +1986,9 @@ func (s *svc) listContainerAcrossProviders(ctx context.Context, req *provider.Li
 }
 
 func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListContainer")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	if utils.IsRelativeReference(req.Ref) {
@@ -2063,6 +2169,9 @@ func (s *svc) ListContainer(ctx context.Context, req *provider.ListContainerRequ
 }
 
 func (s *svc) getPath(ctx context.Context, ref *provider.Reference, keys ...string) (string, *rpc.Status) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getPath")
+	defer span.End()
+
 	// check if it is an id based or combined reference first
 	if ref.ResourceId != nil {
 		req := &provider.StatRequest{Ref: ref, ArbitraryMetadataKeys: keys}
@@ -2153,12 +2262,18 @@ func (s *svc) getSharedFolder(ctx context.Context) string {
 }
 
 func (s *svc) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateSymlink")
+	defer span.End()
+
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
 	}, nil
 }
 
 func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFileVersions")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
@@ -2175,6 +2290,9 @@ func (s *svc) ListFileVersions(ctx context.Context, req *provider.ListFileVersio
 }
 
 func (s *svc) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreFileVersion")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
@@ -2196,6 +2314,9 @@ func (s *svc) ListRecycleStream(_ *provider.ListRecycleStreamRequest, _ gateway.
 
 // TODO use the ListRecycleRequest.Ref to only list the trash of a specific storage.
 func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	c, err := s.find(ctx, req.GetRef())
 	if err != nil {
 		return &provider.ListRecycleResponse{
@@ -2212,6 +2333,9 @@ func (s *svc) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest)
 }
 
 func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreRecycleItemResponse{
@@ -2228,6 +2352,9 @@ func (s *svc) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecyc
 }
 
 func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycle")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.PurgeRecycleResponse{
@@ -2243,6 +2370,9 @@ func (s *svc) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleReques
 }
 
 func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetQuota")
+	defer span.End()
+
 	c, err := s.find(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
@@ -2261,11 +2391,17 @@ func (s *svc) GetQuota(ctx context.Context, req *gateway.GetQuotaRequest) (*prov
 }
 
 func (s *svc) findByPath(ctx context.Context, path string) (provider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "findByPath")
+	defer span.End()
+
 	ref := &provider.Reference{Path: path}
 	return s.find(ctx, ref)
 }
 
 func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "find")
+	defer span.End()
+
 	p, err := s.findProviders(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -2273,8 +2409,11 @@ func (s *svc) find(ctx context.Context, ref *provider.Reference) (provider.Provi
 	return s.getStorageProviderClient(ctx, p[0])
 }
 
-func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
-	c, err := pool.GetStorageProviderServiceClient(pool.Endpoint(p.Address))
+func (s *svc) getStorageProviderClient(ctx context.Context, p *registry.ProviderInfo) (provider.ProviderAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getStorageProviderClient")
+	defer span.End()
+
+	c, err := pool.GetStorageProviderServiceClient(ctx, pool.Endpoint(p.Address))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting a storage provider client")
 		return nil, err
@@ -2284,7 +2423,10 @@ func (s *svc) getStorageProviderClient(_ context.Context, p *registry.ProviderIn
 }
 
 func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*registry.ProviderInfo, error) {
-	c, err := pool.GetStorageRegistryClient(pool.Endpoint(s.c.StorageRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "findProviders")
+	defer span.End()
+
+	c, err := pool.GetStorageRegistryClient(ctx, pool.Endpoint(s.c.StorageRegistryEndpoint))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error getting storage registry client")
 	}
@@ -2319,7 +2461,10 @@ func (s *svc) findProviders(ctx context.Context, ref *provider.Reference) ([]*re
 	return res.Providers, nil
 }
 
-func getUniqueProviders(providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+func (s *svc) getUniqueProviders(ctx context.Context, providers []*registry.ProviderInfo) []*registry.ProviderInfo {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUniqueProviders")
+	defer span.End()
+
 	unique := make(map[string]*registry.ProviderInfo)
 	for _, p := range providers {
 		unique[p.Address] = p

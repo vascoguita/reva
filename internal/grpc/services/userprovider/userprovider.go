@@ -29,12 +29,15 @@ import (
 	"github.com/cs3org/reva/pkg/plugin"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "userprovider"
 
 func init() {
 	rgrpc.Register("userprovider", New)
@@ -105,6 +108,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	usermgr user.Manager
 	plugin  *plugin.RevaPlugin
 }
@@ -125,6 +129,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*userpb.GetUserResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUser")
+	defer span.End()
+
 	user, err := s.usermgr.GetUser(ctx, req.UserId, req.SkipFetchingUserGroups)
 	if err != nil {
 		res := &userpb.GetUserResponse{}
@@ -145,6 +152,9 @@ func (s *service) GetUser(ctx context.Context, req *userpb.GetUserRequest) (*use
 }
 
 func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaimRequest) (*userpb.GetUserByClaimResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserByClaim")
+	defer span.End()
+
 	user, err := s.usermgr.GetUserByClaim(ctx, req.Claim, req.Value, req.SkipFetchingUserGroups)
 	if err != nil {
 		res := &userpb.GetUserByClaimResponse{}
@@ -165,6 +175,9 @@ func (s *service) GetUserByClaim(ctx context.Context, req *userpb.GetUserByClaim
 }
 
 func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (*userpb.FindUsersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindUsers")
+	defer span.End()
+
 	users, err := s.usermgr.FindUsers(ctx, req.Filter, req.SkipFetchingUserGroups)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error finding users")
@@ -187,6 +200,9 @@ func (s *service) FindUsers(ctx context.Context, req *userpb.FindUsersRequest) (
 }
 
 func (s *service) GetUserGroups(ctx context.Context, req *userpb.GetUserGroupsRequest) (*userpb.GetUserGroupsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserGroups")
+	defer span.End()
+
 	groups, err := s.usermgr.GetUserGroups(ctx, req.UserId)
 	if err != nil {
 		err = errors.Wrap(err, "userprovidersvc: error getting user groups")

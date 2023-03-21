@@ -34,11 +34,15 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest) (*gateway.AuthenticateResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	// find auth provider
@@ -183,6 +187,9 @@ func (s *svc) Authenticate(ctx context.Context, req *gateway.AuthenticateRequest
 }
 
 func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.WhoAmIResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "WhoAmI")
+	defer span.End()
+
 	u, _, err := s.tokenmgr.DismantleToken(ctx, req.Token)
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting user from token")
@@ -207,7 +214,10 @@ func (s *svc) WhoAmI(ctx context.Context, req *gateway.WhoAmIRequest) (*gateway.
 }
 
 func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.ProviderAPIClient, error) {
-	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "findAuthProvider")
+	defer span.End()
+
+	c, err := pool.GetAuthRegistryServiceClient(ctx, pool.Endpoint(s.c.AuthRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return nil, err
@@ -224,7 +234,7 @@ func (s *svc) findAuthProvider(ctx context.Context, authType string) (authpb.Pro
 
 	if res.Status.Code == rpc.Code_CODE_OK && res.Providers != nil && len(res.Providers) > 0 {
 		// TODO(labkode): check for capabilities here
-		c, err := pool.GetAuthProviderServiceClient(pool.Endpoint(res.Providers[0].Address))
+		c, err := pool.GetAuthProviderServiceClient(ctx, pool.Endpoint(res.Providers[0].Address))
 		if err != nil {
 			err = errors.Wrap(err, "gateway: error getting an auth provider client")
 			return nil, err

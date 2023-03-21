@@ -27,7 +27,10 @@ import (
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/auth/scope"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "impersonator"
 
 func init() {
 	registry.Register("impersonator", New)
@@ -45,6 +48,9 @@ func (m *mgr) Configure(ml map[string]interface{}) error {
 }
 
 func (m *mgr) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	// allow passing in uid as <opaqueid>@<idp>
 	at := strings.LastIndex(clientID, "@")
 	uid := &user.UserId{Type: user.UserType_USER_TYPE_PRIMARY}

@@ -24,11 +24,15 @@ import (
 	preferences "github.com/cs3org/go-cs3apis/cs3/preferences/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*preferences.SetKeyResponse, error) {
-	c, err := pool.GetPreferencesClient(pool.Endpoint(s.c.PreferencesEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetKey")
+	defer span.End()
+
+	c, err := pool.GetPreferencesClient(ctx, pool.Endpoint(s.c.PreferencesEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferences.SetKeyResponse{
@@ -45,7 +49,10 @@ func (s *svc) SetKey(ctx context.Context, req *preferences.SetKeyRequest) (*pref
 }
 
 func (s *svc) GetKey(ctx context.Context, req *preferences.GetKeyRequest) (*preferences.GetKeyResponse, error) {
-	c, err := pool.GetPreferencesClient(pool.Endpoint(s.c.PreferencesEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetKey")
+	defer span.End()
+
+	c, err := pool.GetPreferencesClient(ctx, pool.Endpoint(s.c.PreferencesEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetPreferencesClient")
 		return &preferences.GetKeyResponse{

@@ -32,14 +32,18 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "authprovider"
+const tracerName = "authprovider"
+
 func init() {
-	rgrpc.Register("authprovider", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -56,6 +60,7 @@ func (c *config) init() {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	authmgr      auth.Manager
 	conf         *config
 	plugin       *plugin.RevaPlugin
@@ -137,6 +142,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) Authenticate(ctx context.Context, req *provider.AuthenticateRequest) (*provider.AuthenticateResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	username := req.ClientId
 	password := req.ClientSecret

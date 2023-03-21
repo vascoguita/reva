@@ -19,7 +19,6 @@
 package datagateway
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,11 +31,15 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/golang-jwt/jwt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "datagateway"
+const tracerName = "datagateway"
 
 const (
 	// TokenTransportHeader holds the header key for the reva transfer token.
@@ -70,6 +73,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf    *config
 	handler http.Handler
 	client  *http.Client
@@ -116,6 +120,9 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) setHandler() {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Datagateway Service HTTP Handler")
+		defer span.End()
+
 		switch r.Method {
 		case http.MethodHead:
 			addCorsHeader(w)
@@ -144,7 +151,10 @@ func addCorsHeader(res http.ResponseWriter) {
 	headers.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
 }
 
-func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, error) {
+func (s *svc) verify(r *http.Request) (*transferClaims, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "verify")
+	defer span.End()
+
 	// Extract transfer token from request header. If not existing, assume that it's the last path segment instead.
 	token := r.Header.Get(TokenTransportHeader)
 	if token == "" {
@@ -169,10 +179,13 @@ func (s *svc) verify(ctx context.Context, r *http.Request) (*transferClaims, err
 }
 
 func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doHead")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -215,10 +228,13 @@ func (s *svc) doHead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doGet")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Error().Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -274,10 +290,13 @@ func (s *svc) doGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doPut")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")
@@ -333,10 +352,13 @@ func (s *svc) doPut(w http.ResponseWriter, r *http.Request) {
 
 // TODO: put and post code is pretty much the same. Should be solved in a nicer way in the long run.
 func (s *svc) doPatch(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doPatch")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
-	claims, err := s.verify(ctx, r)
+	claims, err := s.verify(r)
 	if err != nil {
 		err = errors.Wrap(err, "datagateway: error validating transfer token")
 		log.Err(err).Str("token", r.Header.Get(TokenTransportHeader)).Msg("invalid transfer token")

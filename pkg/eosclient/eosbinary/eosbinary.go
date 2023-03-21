@@ -39,7 +39,6 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/acl"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -239,9 +238,6 @@ func (c *Client) executeEOS(ctx context.Context, cmdArgs []string, auth eosclien
 	}
 
 	cmd.Args = append(cmd.Args, cmdArgs...)
-
-	span := trace.SpanFromContext(ctx)
-	cmd.Args = append(cmd.Args, "--comment", span.SpanContext().TraceID().String())
 
 	err := cmd.Run()
 

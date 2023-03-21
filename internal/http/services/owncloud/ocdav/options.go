@@ -21,9 +21,14 @@ package ocdav
 import (
 	"net/http"
 	"strings"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (s *svc) handleOptions(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleOptions")
+	defer span.End()
+
 	allow := "OPTIONS, LOCK, GET, HEAD, POST, DELETE, PROPPATCH, COPY,"
 	allow += " MOVE, UNLOCK, PROPFIND, MKCOL, REPORT, SEARCH,"
 	allow += " PUT" // TODO(jfd): only for files ... but we cannot create the full path without a user ... which we only have when credentials are sent

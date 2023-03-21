@@ -36,14 +36,17 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/ocm/share"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 )
 
 func (h *Handler) createFederatedCloudShare(w http.ResponseWriter, r *http.Request, resource *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "createFederatedCloudShare")
+	defer span.End()
 
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -123,11 +126,14 @@ func getViewModeFromRole(role *conversions.Role) providerv1beta1.ViewMode {
 
 // GetFederatedShare handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares/{shareid}.
 func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetFederatedShare")
+	defer span.End()
+
 	// TODO: Implement response with HAL schemating
 	ctx := r.Context()
 
 	shareID := chi.URLParam(r, "shareid")
-	gatewayClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gatewayClient, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -158,6 +164,8 @@ func (h *Handler) GetFederatedShare(w http.ResponseWriter, r *http.Request) {
 
 // ListFederatedShares handles GET requests on /apps/files_sharing/api/v1/shares/remote_shares.
 func (h *Handler) ListFederatedShares(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "ListFederatedShares")
+	defer span.End()
 	// TODO Implement pagination.
 	// TODO Implement response with HAL schemating
 }

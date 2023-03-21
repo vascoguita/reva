@@ -40,16 +40,21 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/juliangruber/go-intersect"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "appprovider"
+const tracerName = "appprovider"
+
 func init() {
-	rgrpc.Register("appprovider", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	provider app.Provider
 	conf     *config
 }
@@ -84,6 +89,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New creates a new AppProviderService.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -99,13 +107,11 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	service := &service{
 		conf:     c,
 		provider: provider,
 	}
-
-	go service.registerProvider()
+	go service.registerProvider(ctx)
 	return service, nil
 }
 
@@ -130,12 +136,13 @@ func registerMimeTypes(mappingFile string) error {
 	return nil
 }
 
-func (s *service) registerProvider() {
+func (s *service) registerProvider(ctx context.Context) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "registerProvider")
+	defer span.End()
 	// Give the appregistry service time to come up
 	// TODO(lopresti) we should register the appproviders after all other microservices
 	time.Sleep(3 * time.Second)
 
-	ctx := context.Background()
 	log := logger.New().With().Int("pid", os.Getpid()).Logger()
 	pInfo, err := s.provider.GetAppProviderInfo(ctx)
 	if err != nil {
@@ -154,7 +161,7 @@ func (s *service) registerProvider() {
 		log.Info().Str("appprovider", s.conf.AppProviderURL).Interface("mimetypes", mimeTypes).Msg("appprovider supported mimetypes")
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msgf("error registering app provider: could not get gateway client")
 		return
@@ -212,6 +219,9 @@ func getProvider(c *config) (app.Provider, error) {
 }
 
 func (s *service) OpenInApp(ctx context.Context, req *providerpb.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "OpenInApp")
+	defer span.End()
+
 	appURL, err := s.provider.GetAppURL(ctx, req.ResourceInfo, req.ViewMode, req.AccessToken, req.Opaque.Map, s.conf.Language)
 	if err != nil {
 		res := &providerpb.OpenInAppResponse{

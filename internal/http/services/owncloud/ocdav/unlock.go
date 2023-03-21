@@ -20,9 +20,14 @@ package ocdav
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // TODO(jfd): implement unlock.
 func (s *svc) handleUnlock(w http.ResponseWriter, r *http.Request, ns string) {
+	_, span := tracing.SpanStartFromRequest(r, tracerName, "handleUnlock")
+	defer span.End()
+
 	w.WriteHeader(http.StatusNotImplemented)
 }

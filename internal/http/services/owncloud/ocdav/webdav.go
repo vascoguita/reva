@@ -21,6 +21,8 @@ package ocdav
 import (
 	"net/http"
 	"path"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // Common Webdav methods.
@@ -93,7 +95,11 @@ func (h *WebDavHandler) init(ns string, useLoggedInUserNS bool) error {
 // Handler handles requests.
 func (h *WebDavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ns := applyLayout(r.Context(), h.namespace, h.useLoggedInUserNS, r.URL.Path)
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "WebDav HTTP Handler")
+		defer span.End()
+
+		ctx := r.Context()
+		ns := applyLayout(ctx, h.namespace, h.useLoggedInUserNS, r.URL.Path)
 		switch r.Method {
 		case MethodPropfind:
 			s.handlePathPropfind(w, r, ns)

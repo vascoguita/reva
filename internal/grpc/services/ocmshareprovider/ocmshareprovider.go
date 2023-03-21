@@ -44,11 +44,15 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const serviceName = "ocmshareprovider"
+const tracerName = "ocmshareprovider"
 
 func init() {
 	rgrpc.Register("ocmshareprovider", New)
@@ -66,6 +70,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf       *config
 	repo       share.Repository
 	client     *client.OCMClient
@@ -109,6 +114,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 
 // New creates a new ocm share provider svc.
 func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	c, err := parseConfig(m)
 	if err != nil {
 		return nil, err
@@ -125,7 +133,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 		Insecure: c.ClientInsecure,
 	})
 
-	gateway, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySVC))
+	gateway, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySVC))
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +232,9 @@ func (s *service) getProtocols(ctx context.Context, share *ocm.Share) ocmd.Proto
 }
 
 func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareRequest) (*ocm.CreateOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateOCMShare")
+	defer span.End()
+
 	statRes, err := s.gateway.Stat(ctx, &providerpb.StatRequest{
 		Ref: &providerpb.Reference{
 			ResourceId: req.ResourceId,
@@ -337,6 +348,9 @@ func (s *service) CreateOCMShare(ctx context.Context, req *ocm.CreateOCMShareReq
 }
 
 func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareRequest) (*ocm.RemoveOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveOCMShare")
+	defer span.End()
+
 	// TODO (gdelmont): notify the remote provider using the /notification ocm endpoint
 	// https://cs3org.github.io/OCM-API/docs.html?branch=develop&repo=OCM-API&user=cs3org#/paths/~1notifications/post
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -357,6 +371,9 @@ func (s *service) RemoveOCMShare(ctx context.Context, req *ocm.RemoveOCMShareReq
 }
 
 func (s *service) GetOCMShare(ctx context.Context, req *ocm.GetOCMShareRequest) (*ocm.GetOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetOCMShare")
+	defer span.End()
+
 	// if the request is by token, the user does not need to be in the ctx
 	var user *userpb.User
 	if req.Ref.GetToken() == "" {
@@ -404,6 +421,9 @@ func (s *service) GetOCMShareByToken(ctx context.Context, req *ocm.GetOCMShareBy
 }
 
 func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesRequest) (*ocm.ListOCMSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListOCMShares")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	shares, err := s.repo.ListShares(ctx, user, req.Filters)
 	if err != nil {
@@ -420,6 +440,9 @@ func (s *service) ListOCMShares(ctx context.Context, req *ocm.ListOCMSharesReque
 }
 
 func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareRequest) (*ocm.UpdateOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateOCMShare")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	_, err := s.repo.UpdateShare(ctx, user, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
@@ -440,6 +463,9 @@ func (s *service) UpdateOCMShare(ctx context.Context, req *ocm.UpdateOCMShareReq
 }
 
 func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceivedOCMSharesRequest) (*ocm.ListReceivedOCMSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListReceivedOCMShares")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	shares, err := s.repo.ListReceivedShares(ctx, user)
 	if err != nil {
@@ -456,6 +482,9 @@ func (s *service) ListReceivedOCMShares(ctx context.Context, req *ocm.ListReceiv
 }
 
 func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateReceivedOCMShareRequest) (*ocm.UpdateReceivedOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedOCMShare")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	_, err := s.repo.UpdateReceivedShare(ctx, user, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
@@ -476,6 +505,9 @@ func (s *service) UpdateReceivedOCMShare(ctx context.Context, req *ocm.UpdateRec
 }
 
 func (s *service) GetReceivedOCMShare(ctx context.Context, req *ocm.GetReceivedOCMShareRequest) (*ocm.GetReceivedOCMShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedOCMShare")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	ocmshare, err := s.repo.GetReceivedShare(ctx, user, req.Ref)
 	if err != nil {

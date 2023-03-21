@@ -26,8 +26,11 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/plugin"
+	"github.com/cs3org/reva/pkg/tracing"
 	hcplugin "github.com/hashicorp/go-plugin"
 )
+
+const tracerName = "authprovider"
 
 func init() {
 	plugin.Register("authprovider", &ProviderPlugin{})
@@ -88,6 +91,9 @@ type AuthenticateReply struct {
 
 // Authenticate RPCClient Authenticate method.
 func (m *RPCClient) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	ctxVal := appctx.GetKeyValuesFromCtx(ctx)
 	args := AuthenticateArgs{Ctx: ctxVal, ClientID: clientID, ClientSecret: clientSecret}
 	reply := AuthenticateReply{}
@@ -113,6 +119,9 @@ func (m *RPCServer) Configure(args ConfigureArg, resp *ConfigureReply) error {
 // Authenticate RPCServer Authenticate method.
 func (m *RPCServer) Authenticate(args AuthenticateArgs, resp *AuthenticateReply) error {
 	ctx := appctx.PutKeyValuesToCtx(args.Ctx)
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	resp.User, resp.Auth, resp.Error = m.Impl.Authenticate(ctx, args.ClientID, args.ClientSecret)
 	return nil
 }

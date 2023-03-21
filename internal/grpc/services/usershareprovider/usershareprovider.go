@@ -32,10 +32,13 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "usershareprovider"
 
 func init() {
 	rgrpc.Register("usershareprovider", New)
@@ -54,6 +57,7 @@ func (c *config) init() {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf                  *config
 	sm                    share.Manager
 	allowedPathsForShares []*regexp.Regexp
@@ -133,6 +137,9 @@ func (s *service) isPathAllowed(path string) bool {
 }
 
 func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateShare")
+	defer span.End()
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_USER && req.Grant.Grantee.GetUserId().Idp == "" {
 		// use logged in user Idp as default.
@@ -161,6 +168,9 @@ func (s *service) CreateShare(ctx context.Context, req *collaboration.CreateShar
 }
 
 func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveShare")
+	defer span.End()
+
 	err := s.sm.Unshare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
@@ -174,6 +184,9 @@ func (s *service) RemoveShare(ctx context.Context, req *collaboration.RemoveShar
 }
 
 func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetShare")
+	defer span.End()
+
 	share, err := s.sm.GetShare(ctx, req.Ref)
 	if err != nil {
 		return &collaboration.GetShareResponse{
@@ -188,6 +201,9 @@ func (s *service) GetShare(ctx context.Context, req *collaboration.GetShareReque
 }
 
 func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListShares")
+	defer span.End()
+
 	shares, err := s.sm.ListShares(ctx, req.Filters) // TODO(labkode): add filter to share manager
 	if err != nil {
 		return &collaboration.ListSharesResponse{
@@ -203,6 +219,9 @@ func (s *service) ListShares(ctx context.Context, req *collaboration.ListSharesR
 }
 
 func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateShare")
+	defer span.End()
+
 	share, err := s.sm.UpdateShare(ctx, req.Ref, req.Field.GetPermissions()) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateShareResponse{
@@ -218,6 +237,9 @@ func (s *service) UpdateShare(ctx context.Context, req *collaboration.UpdateShar
 }
 
 func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListReceivedShares")
+	defer span.End()
+
 	// For the UI add a filter to not display the denial shares
 	foundExclude := false
 	for _, f := range req.Filters {
@@ -244,6 +266,9 @@ func (s *service) ListReceivedShares(ctx context.Context, req *collaboration.Lis
 }
 
 func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	share, err := s.sm.GetReceivedShare(ctx, req.Ref)
@@ -262,6 +287,9 @@ func (s *service) GetReceivedShare(ctx context.Context, req *collaboration.GetRe
 }
 
 func (s *service) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedShare")
+	defer span.End()
+
 	share, err := s.sm.UpdateReceivedShare(ctx, req.Share, req.UpdateMask) // TODO(labkode): check what to update
 	if err != nil {
 		return &collaboration.UpdateReceivedShareResponse{

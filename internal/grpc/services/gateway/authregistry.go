@@ -26,11 +26,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) ListAuthProviders(ctx context.Context, req *registry.ListAuthProvidersRequest) (*gateway.ListAuthProvidersResponse, error) {
-	c, err := pool.GetAuthRegistryServiceClient(pool.Endpoint(s.c.AuthRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAuthProviders")
+	defer span.End()
+
+	c, err := pool.GetAuthRegistryServiceClient(ctx, pool.Endpoint(s.c.AuthRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting auth registry client")
 		return &gateway.ListAuthProvidersResponse{

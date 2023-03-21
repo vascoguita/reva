@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"path"
@@ -34,7 +33,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
@@ -42,9 +41,10 @@ import (
 )
 
 func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "tus-post")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathTusPost")
 	defer span.End()
 
+	ctx := r.Context()
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
 	for _, r := range nameRules {
@@ -61,13 +61,14 @@ func (s *svc) handlePathTusPost(w http.ResponseWriter, r *http.Request, ns strin
 	// check tus headers?
 
 	ref := &provider.Reference{Path: fn}
-	s.handleTusPost(ctx, w, r, meta, ref, sublog)
+	s.handleTusPost(w, r, meta, ref, sublog)
 }
 
 func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces-tus-post")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesTusPost")
 	defer span.End()
 
+	ctx := r.Context()
 	// read filename from metadata
 	meta := tusd.ParseMetadataHeader(r.Header.Get(HeaderUploadMetadata))
 	if meta["filename"] == "" {
@@ -84,14 +85,18 @@ func (s *svc) handleSpacesTusPost(w http.ResponseWriter, r *http.Request, spaceI
 		return
 	}
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
-	s.handleTusPost(ctx, w, r, meta, spaceRef, sublog)
+	s.handleTusPost(w, r, meta, spaceRef, sublog)
 }
 
-func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
+func (s *svc) handleTusPost(w http.ResponseWriter, r *http.Request, meta map[string]string, ref *provider.Reference, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleTusPost")
+	defer span.End()
+
+	ctx := r.Context()
 	w.Header().Add(HeaderAccessControlAllowHeaders, strings.Join([]string{HeaderTusResumable, HeaderUploadLength, HeaderUploadMetadata, HeaderIfMatch}, ", "))
 	w.Header().Add(HeaderAccessControlExposeHeaders, strings.Join([]string{HeaderTusResumable, HeaderLocation}, ", "))
 	w.Header().Set(HeaderTusExtension, "creation,creation-with-upload,checksum,expiration")
@@ -116,7 +121,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	// TODO check Expect: 100-continue
 
 	// check if destination exists or is a file
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -134,7 +139,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, sRes.Status)
+		HandleErrorStatus(ctx, &log, w, sRes.Status)
 		return
 	}
 
@@ -192,7 +197,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 			w.WriteHeader(http.StatusPreconditionFailed)
 			return
 		}
-		HandleErrorStatus(&log, w, uRes.Status)
+		HandleErrorStatus(ctx, &log, w, uRes.Status)
 		return
 	}
 
@@ -278,7 +283,7 @@ func (s *svc) handleTusPost(ctx context.Context, w http.ResponseWriter, r *http.
 					return
 				}
 
-				HandleErrorStatus(&log, w, sRes.Status)
+				HandleErrorStatus(ctx, &log, w, sRes.Status)
 				return
 			}
 

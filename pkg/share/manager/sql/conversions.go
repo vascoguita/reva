@@ -30,6 +30,7 @@ import (
 	conversions "github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 //go:generate mockery -name UserConverter
@@ -73,7 +74,10 @@ func NewGatewayUserConverter(gwAddr string) *GatewayUserConverter {
 
 // UserIDToUserName converts a user ID to an username.
 func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *userpb.UserId) (string, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UserIDToUserName")
+	defer span.End()
+
+	gwConn, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.gwAddr))
 	if err != nil {
 		return "", err
 	}
@@ -92,7 +96,10 @@ func (c *GatewayUserConverter) UserIDToUserName(ctx context.Context, userid *use
 
 // UserNameToUserID converts a username to an user ID.
 func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username string) (*userpb.UserId, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(c.gwAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UserNameToUserID")
+	defer span.End()
+
+	gwConn, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.gwAddr))
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +118,9 @@ func (c *GatewayUserConverter) UserNameToUserID(ctx context.Context, username st
 }
 
 func (m *mgr) formatGrantee(ctx context.Context, g *provider.Grantee) (int, string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "formatGrantee")
+	defer span.End()
+
 	var granteeType int
 	var formattedID string
 	switch g.Type {
@@ -131,6 +141,9 @@ func (m *mgr) formatGrantee(ctx context.Context, g *provider.Grantee) (int, stri
 }
 
 func (m *mgr) extractGrantee(ctx context.Context, t int, g string) (*provider.Grantee, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "extractGrantee")
+	defer span.End()
+
 	var grantee provider.Grantee
 	switch t {
 	case 0:
@@ -203,6 +216,9 @@ func extractGroupID(u string) *grouppb.GroupId {
 }
 
 func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID string) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToCS3Share")
+	defer span.End()
+
 	ts := &typespb.Timestamp{
 		Seconds: uint64(s.STime),
 	}
@@ -245,6 +261,9 @@ func (m *mgr) convertToCS3Share(ctx context.Context, s DBShare, storageMountID s
 }
 
 func (m *mgr) convertToCS3ReceivedShare(ctx context.Context, s DBShare, storageMountID string) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToCS3ReceivedShare")
+	defer span.End()
+
 	share, err := m.convertToCS3Share(ctx, s, storageMountID)
 	if err != nil {
 		return nil, err

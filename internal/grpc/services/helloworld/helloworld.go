@@ -24,10 +24,13 @@ import (
 
 	"github.com/cs3org/reva/internal/grpc/services/helloworld/proto"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "helloworld"
 
 func init() {
 	rgrpc.Register("helloworld", New)
@@ -37,6 +40,7 @@ type conf struct {
 	Message string `mapstructure:"message"`
 }
 type service struct {
+	tracing.GrpcMiddleware
 	conf *conf
 }
 
@@ -70,6 +74,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) Hello(ctx context.Context, req *proto.HelloRequest) (*proto.HelloResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Hello")
+	defer span.End()
+
 	if req.Name == "" {
 		req.Name = "Mr. Nobody"
 	}

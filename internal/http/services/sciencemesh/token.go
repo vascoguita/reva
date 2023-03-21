@@ -19,6 +19,7 @@
 package sciencemesh
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"html/template"
@@ -50,9 +51,9 @@ type tokenHandler struct {
 	tplInviteLink *template.Template
 }
 
-func (h *tokenHandler) init(c *config) error {
+func (h *tokenHandler) init(ctx context.Context, c *config) error {
 	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	h.gatewayClient, err = pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return err
 	}

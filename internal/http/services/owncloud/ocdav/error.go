@@ -19,10 +19,12 @@
 package ocdav
 
 import (
+	"context"
 	"encoding/xml"
 	"net/http"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
@@ -96,7 +98,10 @@ var errInvalidPropfind = errors.New("webdav: invalid propfind")
 
 // HandleErrorStatus checks the status code, logs a Debug or Error level message
 // and writes an appropriate http status.
-func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+func HandleErrorStatus(ctx context.Context, log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "HandleErrorStatus")
+	defer span.End()
+
 	switch s.Code {
 	case rpc.Code_CODE_OK:
 		log.Debug().Interface("status", s).Msg("ok")
@@ -130,7 +135,10 @@ func HandleErrorStatus(log *zerolog.Logger, w http.ResponseWriter, s *rpc.Status
 
 // HandleWebdavError checks the status code, logs an error and creates a webdav response body
 // if needed.
-func HandleWebdavError(log *zerolog.Logger, w http.ResponseWriter, b []byte, err error) {
+func HandleWebdavError(ctx context.Context, log *zerolog.Logger, w http.ResponseWriter, b []byte, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "HandleWebdavError")
+	defer span.End()
+
 	if err != nil {
 		log.Error().Msgf("error marshaling xml response: %s", b)
 		w.WriteHeader(http.StatusInternalServerError)

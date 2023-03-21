@@ -50,12 +50,15 @@ import (
 	"github.com/cs3org/reva/pkg/share/cache"
 	cachereg "github.com/cs3org/reva/pkg/share/cache/registry"
 	warmupreg "github.com/cs3org/reva/pkg/share/cache/warmup/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const tracerName = "shares"
 
 const (
 	storageIDPrefix string = "shared::"
@@ -139,6 +142,9 @@ func (h *Handler) startCacheWarmup(c cache.Warmup) {
 }
 
 func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "extractReference")
+	defer span.End()
+
 	var ref provider.Reference
 	if p := r.FormValue("path"); p != "" {
 		ref = provider.Reference{Path: path.Join(h.homeNamespace, p)}
@@ -154,7 +160,9 @@ func (h *Handler) extractReference(r *http.Request) (provider.Reference, error) 
 
 // CreateShare handles POST requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "CreateShare")
+	defer span.End()
+
 	shareType, err := strconv.Atoi(r.FormValue("shareType"))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaBadRequest.StatusCode, "shareType must be an integer", nil)
@@ -162,7 +170,8 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 	// get user permissions on the shared file
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -188,7 +197,7 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		ocdav.HandleErrorStatus(&log, w, statRes.Status)
+		ocdav.HandleErrorStatus(ctx, &log, w, statRes.Status)
 		return
 	}
 
@@ -235,6 +244,9 @@ func (h *Handler) CreateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) extractPermissions(w http.ResponseWriter, r *http.Request, ri *provider.ResourceInfo, defaultPermissions *conversions.Role) (*conversions.Role, []byte, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "extractPermissions")
+	defer span.End()
+
 	reqRole, reqPermissions := r.FormValue("role"), r.FormValue("permissions")
 	var role *conversions.Role
 
@@ -298,20 +310,23 @@ type PublicShareContextName string
 
 // GetShare handles GET requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetShare")
+	defer span.End()
+
 	var share *conversions.ShareData
 	var resourceID *provider.ResourceId
 	shareID := chi.URLParam(r, "shareid")
 	ctx := r.Context()
-	log := appctx.GetLogger(r.Context())
+	log := appctx.GetLogger(ctx)
 	log.Debug().Str("shareID", shareID).Msg("get share by id")
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
 
 	log.Debug().Str("shareID", shareID).Msg("get public share by id")
-	psRes, err := client.GetPublicShare(r.Context(), &link.GetPublicShareRequest{
+	psRes, err := client.GetPublicShare(ctx, &link.GetPublicShareRequest{
 		Ref: &link.PublicShareReference{
 			Spec: &link.PublicShareReference_Id{
 				Id: &link.PublicShareId{
@@ -413,6 +428,9 @@ func (h *Handler) GetShare(w http.ResponseWriter, r *http.Request) {
 
 // UpdateShare handles PUT requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "UpdateShare")
+	defer span.End()
+
 	shareID := chi.URLParam(r, "shareid")
 	// FIXME: isPublicShare is already doing a GetShare and GetPublicShare,
 	// we should just reuse that object when doing updates
@@ -424,6 +442,9 @@ func (h *Handler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "updateShare")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -444,7 +465,7 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -521,6 +542,9 @@ func (h *Handler) updateShare(w http.ResponseWriter, r *http.Request, shareID st
 
 // RemoveShare handles DELETE requests on /apps/files_sharing/api/v1/shares/(shareid).
 func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "RemoveShare")
+	defer span.End()
+
 	shareID := chi.URLParam(r, "shareid")
 	switch {
 	case h.isPublicShare(r, shareID):
@@ -535,6 +559,9 @@ func (h *Handler) RemoveShare(w http.ResponseWriter, r *http.Request) {
 
 // ListShares handles GET requests on /apps/files_sharing/api/v1/shares.
 func (h *Handler) ListShares(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "ListShares")
+	defer span.End()
+
 	if r.FormValue("shared_with_me") != "" {
 		var err error
 		listSharedWithMe, err := strconv.ParseBool(r.FormValue("shared_with_me"))
@@ -557,17 +584,19 @@ const (
 )
 
 func (h *Handler) listSharesWithMe(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "listSharesWithMe")
+	defer span.End()
+
 	// which pending state to list
 	stateFilter := getStateFilter(r.FormValue("state"))
 
-	log := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
 	}
-
-	ctx := r.Context()
 
 	var pinfo *provider.ResourceInfo
 	p := r.URL.Query().Get("path")
@@ -766,6 +795,9 @@ func findMatch(shareJailInfos []*provider.ResourceInfo, id *provider.ResourceId)
 }
 
 func (h *Handler) listSharesWithOthers(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "listSharesWithOthers")
+	defer span.End()
+
 	shares := make([]*conversions.ShareData, 0)
 
 	log := appctx.GetLogger(r.Context())
@@ -849,12 +881,15 @@ func (h *Handler) logProblems(s *rpc.Status, e error, msg string, log *zerolog.L
 }
 
 func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix string) ([]*collaboration.Filter, []*link.ListPublicSharesRequest_Filter, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "addFilters")
+	defer span.End()
+
 	collaborationFilters := []*collaboration.Filter{}
 	linkFilters := []*link.ListPublicSharesRequest_Filter{}
-	ctx := r.Context()
 
+	ctx := r.Context()
 	// first check if the file exists
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return nil, nil, err
@@ -885,6 +920,9 @@ func (h *Handler) addFilters(w http.ResponseWriter, r *http.Request, prefix stri
 }
 
 func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, info *provider.ResourceInfo) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "addFileInfo")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if info != nil {
 		// TODO The owner is not set in the storage stat metadata ...
@@ -928,6 +966,9 @@ func (h *Handler) addFileInfo(ctx context.Context, s *conversions.ShareData, inf
 
 // mustGetIdentifiers always returns a struct with identifiers, if the user or group could not be found they will all be empty.
 func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.GatewayAPIClient, id string, isGroup bool) *userIdentifiers {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "mustGetIdentifiers")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx).With().Str("id", id).Logger()
 	if id == "" {
 		return &userIdentifiers{}
@@ -1008,6 +1049,9 @@ func (h *Handler) mustGetIdentifiers(ctx context.Context, client gateway.Gateway
 }
 
 func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClient, s *conversions.ShareData) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "mapUserIds")
+	defer span.End()
+
 	if s.UIDOwner != "" {
 		owner := h.mustGetIdentifiers(ctx, client, s.UIDOwner, false)
 		s.UIDOwner = owner.Username
@@ -1043,6 +1087,9 @@ func (h *Handler) mapUserIds(ctx context.Context, client gateway.GatewayAPIClien
 }
 
 func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentifiers) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getAdditionalInfoAttribute")
+	defer span.End()
+
 	var buf bytes.Buffer
 	if err := h.additionalInfoTemplate.Execute(&buf, u); err != nil {
 		log := appctx.GetLogger(ctx)
@@ -1053,18 +1100,27 @@ func (h *Handler) getAdditionalInfoAttribute(ctx context.Context, u *userIdentif
 }
 
 func (h *Handler) getResourceInfoByPath(ctx context.Context, client gateway.GatewayAPIClient, path string) (*provider.ResourceInfo, *rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getResourceInfoByPath")
+	defer span.End()
+
 	return h.getResourceInfo(ctx, client, path, &provider.Reference{
 		Path: path,
 	})
 }
 
 func (h *Handler) getResourceInfoByID(ctx context.Context, client gateway.GatewayAPIClient, id *provider.ResourceId) (*provider.ResourceInfo, *rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getResourceInfoByID")
+	defer span.End()
+
 	return h.getResourceInfo(ctx, client, resourceid.OwnCloudResourceIDWrap(id), &provider.Reference{ResourceId: id})
 }
 
 // getResourceInfo retrieves the resource info to a target.
 // This method utilizes caching if it is enabled.
 func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPIClient, key string, ref *provider.Reference) (*provider.ResourceInfo, *rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getResourceInfo")
+	defer span.End()
+
 	logger := appctx.GetLogger(ctx)
 
 	var pinfo *provider.ResourceInfo
@@ -1103,7 +1159,11 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "createCs3Share")
+	defer span.End()
+
+	ctx := r.Context()
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)

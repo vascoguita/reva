@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"net/http"
 	"path"
 	"strconv"
@@ -34,13 +33,16 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func sufferMacOSFinder(r *http.Request) bool {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "sufferMacOSFinder")
+	defer span.End()
+
 	return r.Header.Get(HeaderExpectedEntityLength) != ""
 }
 
@@ -61,8 +63,11 @@ func handleMacOSFinder(w http.ResponseWriter, r *http.Request) error {
 	   but we don't get a request body we will fail the request to
 	   protect the end-user.
 	*/
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleMacOSFinder")
+	defer span.End()
 
-	log := appctx.GetLogger(r.Context())
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	content := r.Header.Get(HeaderContentLength)
 	expected := r.Header.Get(HeaderExpectedEntityLength)
 	log.Warn().Str("content-length", content).Str("x-expected-entity-length", expected).Msg("Mac OS Finder corner-case detected")
@@ -102,23 +107,30 @@ func isContentRange(r *http.Request) bool {
 		   in unexpected behaviour (cf PEAR::HTTP_WebDAV_Client 1.0.1), we reject
 		   all PUT requests with a Content-Range for now.
 	*/
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "isContentRange")
+	defer span.End()
 	return r.Header.Get(HeaderContentRange) != ""
 }
 
 func (s *svc) handlePathPut(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "put")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathPut")
 	defer span.End()
 
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
 	ref := &provider.Reference{Path: fn}
 
-	s.handlePut(ctx, w, r, ref, sublog)
+	s.handlePut(w, r, ref, sublog)
 }
 
-func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+func (s *svc) handlePut(w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePut")
+	defer span.End()
+
+	ctx := r.Context()
 	if !checkPreconditions(w, r, log) {
 		// checkPreconditions handles error returns
 		return
@@ -130,7 +142,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -145,7 +157,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if sRes.Status.Code != rpc.Code_CODE_OK && sRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&log, w, sRes.Status)
+		HandleErrorStatus(ctx, &log, w, sRes.Status)
 		return
 	}
 
@@ -235,11 +247,11 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				code:    SabredavPermissionDenied,
 				message: "permission denied: you have no permission to upload content",
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		case rpc.Code_CODE_NOT_FOUND:
 			w.WriteHeader(http.StatusConflict)
 		default:
-			HandleErrorStatus(&log, w, uRes.Status)
+			HandleErrorStatus(ctx, &log, w, uRes.Status)
 		}
 		return
 	}
@@ -276,7 +288,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				code:    SabredavBadRequest,
 				message: "The computed checksum does not match the one received from the client.",
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 			return
 		}
 		log.Error().Err(err).Msg("PUT request to data server failed")
@@ -307,7 +319,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	if sRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, sRes.Status)
+		HandleErrorStatus(ctx, &log, w, sRes.Status)
 		return
 	}
 
@@ -332,9 +344,10 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_put")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesPut")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
 	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
@@ -345,14 +358,17 @@ func (s *svc) handleSpacesPut(w http.ResponseWriter, r *http.Request, spaceID st
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
-	s.handlePut(ctx, w, r, spaceRef, sublog)
+	s.handlePut(w, r, spaceRef, sublog)
 }
 
 func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logger) bool {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "checkPreconditions")
+	defer span.End()
+
 	if isContentRange(r) {
 		log.Debug().Msg("Content-Range not supported for PUT")
 		w.WriteHeader(http.StatusNotImplemented)
@@ -371,6 +387,9 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, log zerolog.Logg
 }
 
 func getContentLength(w http.ResponseWriter, r *http.Request) (int64, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "getContentLength")
+	defer span.End()
+
 	length, err := strconv.ParseInt(r.Header.Get(HeaderContentLength), 10, 64)
 	if err != nil {
 		// Fallback to Upload-Length

@@ -25,8 +25,11 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "accounts"
 
 // Accounts represents oc10-style Accounts.
 type Accounts struct {
@@ -110,6 +113,9 @@ type Account struct {
 }
 
 func (as *Accounts) rowToAccount(ctx context.Context, row Scannable) (*Account, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "rowToAccount")
+	defer span.End()
+
 	a := Account{}
 	if err := row.Scan(&a.ID, &a.Email, &a.UserID, &a.DisplayName, &a.Quota, &a.LastLogin, &a.Backend, &a.Home, &a.State, &a.PasswordHash, &a.Username, &a.OwnCloudUUID); err != nil {
 		appctx.GetLogger(ctx).Error().Err(err).Msg("could not scan row, skipping")
@@ -126,6 +132,9 @@ type Scannable interface {
 
 // GetAccountByLogin fetches an account by mail or username.
 func (as *Accounts) GetAccountByLogin(ctx context.Context, login string) (*Account, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAccountByLogin")
+	defer span.End()
+
 	var row *sql.Row
 	username := strings.ToLower(login) // usernames are lowercased in owncloud classic
 	if as.joinUsername {
@@ -139,6 +148,9 @@ func (as *Accounts) GetAccountByLogin(ctx context.Context, login string) (*Accou
 
 // GetAccountGroups reads the groups for an account.
 func (as *Accounts) GetAccountGroups(ctx context.Context, uid string) ([]string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAccountGroups")
+	defer span.End()
+
 	rows, err := as.db.QueryContext(ctx, "SELECT gid FROM oc_group_user WHERE uid=?", uid)
 	if err != nil {
 		return nil, err

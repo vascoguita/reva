@@ -33,12 +33,15 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
+
+const tracerName = "json"
 
 func init() {
 	registry.Register("json", New)
@@ -176,6 +179,9 @@ func genID() string {
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Share")
+	defer span.End()
+
 	id := genID()
 	user := ctxpkg.ContextMustGetUser(ctx)
 	now := time.Now().UnixNano()
@@ -230,6 +236,9 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByID")
+	defer span.End()
+
 	m.Lock()
 	defer m.Unlock()
 	for _, s := range m.model.Shares {
@@ -241,6 +250,9 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByKey")
+	defer span.End()
+
 	m.Lock()
 	defer m.Unlock()
 	for _, s := range m.model.Shares {
@@ -253,6 +265,9 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 }
 
 func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *collaboration.Share, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "get")
+	defer span.End()
+
 	switch {
 	case ref.GetId() != nil:
 		s, err = m.getByID(ctx, ref.GetId())
@@ -282,6 +297,9 @@ func (m *mgr) get(ctx context.Context, ref *collaboration.ShareReference) (s *co
 }
 
 func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetShare")
+	defer span.End()
+
 	share, err := m.get(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -291,6 +309,9 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unshare")
+	defer span.End()
+
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -325,6 +346,9 @@ func sharesEqual(ref *collaboration.ShareReference, s *collaboration.Share) bool
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateShare")
+	defer span.End()
+
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -349,6 +373,9 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListShares")
+	defer span.End()
+
 	var ss []*collaboration.Share
 	m.Lock()
 	defer m.Unlock()
@@ -371,6 +398,9 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListReceivedShares")
+	defer span.End()
+
 	var rss []*collaboration.ReceivedShare
 	m.Lock()
 	defer m.Unlock()
@@ -397,6 +427,9 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 
 // convert must be called in a lock-controlled block.
 func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboration.ReceivedShare {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convert")
+	defer span.End()
+
 	rs := &collaboration.ReceivedShare{
 		Share: s,
 		State: collaboration.ShareState_SHARE_STATE_PENDING,
@@ -411,10 +444,16 @@ func (m *mgr) convert(ctx context.Context, s *collaboration.Share) *collaboratio
 }
 
 func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedShare")
+	defer span.End()
+
 	return m.getReceived(ctx, ref)
 }
 
 func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getReceived")
+	defer span.End()
+
 	m.Lock()
 	defer m.Unlock()
 	user := ctxpkg.ContextMustGetUser(ctx)
@@ -430,6 +469,9 @@ func (m *mgr) getReceived(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, receivedShare *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedShare")
+	defer span.End()
+
 	rs, err := m.getReceived(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: receivedShare.Share.Id}})
 	if err != nil {
 		return nil, err

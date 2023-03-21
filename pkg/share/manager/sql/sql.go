@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/share"
 	"github.com/cs3org/reva/pkg/share/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 
 	// Provides mysql drivers.
@@ -42,6 +43,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/protobuf/field_mask"
 )
+
+const tracerName = "sql"
 
 const (
 	shareTypeUser  = 0
@@ -106,6 +109,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collaboration.ShareGrant) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Share")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	// do not allow share to myself or the owner if share is for a user
@@ -183,6 +189,9 @@ func (m *mgr) Share(ctx context.Context, md *provider.ResourceInfo, g *collabora
 }
 
 func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetShare")
+	defer span.End()
+
 	var s *collaboration.Share
 	var err error
 	switch {
@@ -202,6 +211,9 @@ func (m *mgr) GetShare(ctx context.Context, ref *collaboration.ShareReference) (
 }
 
 func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unshare")
+	defer span.End()
+
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 	var query string
 	params := []interface{}{}
@@ -242,6 +254,9 @@ func (m *mgr) Unshare(ctx context.Context, ref *collaboration.ShareReference) er
 }
 
 func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference, p *collaboration.SharePermissions) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateShare")
+	defer span.End()
+
 	permissions := sharePermToInt(p.Permissions)
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 
@@ -276,6 +291,9 @@ func (m *mgr) UpdateShare(ctx context.Context, ref *collaboration.ShareReference
 }
 
 func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListShares")
+	defer span.End()
+
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, id, stime, permissions, share_type FROM oc_share WHERE (uid_owner=? or uid_initiator=?)"
 	params := []interface{}{uid, uid}
@@ -328,6 +346,9 @@ func (m *mgr) ListShares(ctx context.Context, filters []*collaboration.Filter) (
 
 // we list the shares that are targeted to the user in context or to the user groups.
 func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.Filter) ([]*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListReceivedShares")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := user.Username
 
@@ -385,6 +406,9 @@ func (m *mgr) ListReceivedShares(ctx context.Context, filters []*collaboration.F
 }
 
 func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareReference) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedShare")
+	defer span.End()
+
 	var s *collaboration.ReceivedShare
 	var err error
 	switch {
@@ -404,6 +428,9 @@ func (m *mgr) GetReceivedShare(ctx context.Context, ref *collaboration.ShareRefe
 }
 
 func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.ReceivedShare, fieldMask *field_mask.FieldMask) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedShare")
+	defer span.End()
+
 	rs, err := m.GetReceivedShare(ctx, &collaboration.ShareReference{Spec: &collaboration.ShareReference_Id{Id: share.Share.Id}})
 	if err != nil {
 		return nil, err
@@ -442,6 +469,9 @@ func (m *mgr) UpdateReceivedShare(ctx context.Context, share *collaboration.Rece
 }
 
 func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByID")
+	defer span.End()
+
 	uid := ctxpkg.ContextMustGetUser(ctx).Username
 	s := DBShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(item_source, '') as item_source, stime, permissions, share_type FROM oc_share WHERE id=? AND (uid_owner=? or uid_initiator=?)"
@@ -455,6 +485,9 @@ func (m *mgr) getByID(ctx context.Context, id *collaboration.ShareId) (*collabor
 }
 
 func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.Share, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByKey")
+	defer span.End()
+
 	owner, err := m.userConverter.UserIDToUserName(ctx, key.Owner)
 	if err != nil {
 		return nil, err
@@ -477,6 +510,9 @@ func (m *mgr) getByKey(ctx context.Context, key *collaboration.ShareKey) (*colla
 }
 
 func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getReceivedByID")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := user.Username
 
@@ -502,6 +538,9 @@ func (m *mgr) getReceivedByID(ctx context.Context, id *collaboration.ShareId) (*
 }
 
 func (m *mgr) getReceivedByKey(ctx context.Context, key *collaboration.ShareKey) (*collaboration.ReceivedShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getReceivedByKey")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	uid := user.Username
 

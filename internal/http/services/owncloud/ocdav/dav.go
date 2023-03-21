@@ -32,6 +32,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -99,6 +100,9 @@ func isOwner(userIDorName string, user *userv1beta1.User) bool {
 // Handler handles requests.
 func (h *DavHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Dav HTTP Handler")
+		defer span.End()
+
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -181,7 +185,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "ocm")
 			ctx := context.WithValue(ctx, ctxKeyBaseURI, base)
 
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -222,7 +226,7 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 		case "public-files":
 			base := path.Join(ctx.Value(ctxKeyBaseURI).(string), "public-files")
 			ctx = context.WithValue(ctx, ctxKeyBaseURI, base)
-			c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 			}
@@ -304,16 +308,22 @@ func (h *DavHandler) Handler(s *svc) http.Handler {
 				code:    SabredavNotFound,
 				message: "File not found in root",
 			})
-			HandleWebdavError(log, w, b, err)
+			HandleWebdavError(ctx, log, w, b, err)
 		}
 	})
 }
 
 func getTokenStatInfo(ctx context.Context, client gatewayv1beta1.GatewayAPIClient, token string) (*provider.StatResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getTokenStatInfo")
+	defer span.End()
+
 	return client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{Path: path.Join("/public", token)}})
 }
 
 func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, pw string) (*gatewayv1beta1.AuthenticateResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "handleBasicAuth")
+	defer span.End()
+
 	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
 		Type:         "publicshares",
 		ClientId:     token,
@@ -324,6 +334,9 @@ func handleBasicAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, tok
 }
 
 func handleSignatureAuth(ctx context.Context, c gatewayv1beta1.GatewayAPIClient, token, sig, expiration string) (*gatewayv1beta1.AuthenticateResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "handleSignatureAuth")
+	defer span.End()
+
 	authenticateRequest := gatewayv1beta1.AuthenticateRequest{
 		Type:         "publicshares",
 		ClientId:     token,

@@ -33,16 +33,21 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "ocs"
+const tracerName = "ocs"
 
 func init() {
 	global.Register("ocs", New)
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	c                  *config.Config
 	router             *chi.Mux
 	warmupCacheTracker *ttlcache.Cache
@@ -146,7 +151,11 @@ func (s *svc) routerInit() error {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log := appctx.GetLogger(r.Context())
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Ocs Service HTTP Handler")
+		defer span.End()
+
+		ctx := r.Context()
+		log := appctx.GetLogger(ctx)
 		log.Debug().Str("path", r.URL.Path).Msg("ocs routing")
 
 		// Warmup the share cache for the user

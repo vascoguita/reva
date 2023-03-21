@@ -23,7 +23,11 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const serviceName = "reqres"
+const tracerName = "reqres"
 
 // APIErrorCode stores the type of error encountered.
 type APIErrorCode string
@@ -60,6 +64,9 @@ type APIError struct {
 
 // WriteError handles writing error responses.
 func WriteError(w http.ResponseWriter, r *http.Request, code APIErrorCode, message string, e error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "WriteError")
+	defer span.End()
+
 	if e != nil {
 		appctx.GetLogger(r.Context()).Error().Err(e).Msg(message)
 	}

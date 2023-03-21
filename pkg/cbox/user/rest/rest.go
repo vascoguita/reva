@@ -30,6 +30,7 @@ import (
 	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	utils "github.com/cs3org/reva/pkg/cbox/utils"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/user/manager/registry"
 	"github.com/gomodule/redigo/redis"
@@ -37,6 +38,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
+
+const tracerName = "rest"
 
 func init() {
 	registry.Register("rest", New)
@@ -194,6 +197,9 @@ func (m *manager) fetchAllUserAccounts() error {
 }
 
 func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]interface{}) (*userpb.User, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "parseAndCacheUser")
+	defer span.End()
+
 	upn, ok := userData["upn"].(string)
 	if !ok {
 		return nil, errors.New("rest: missing upn in user data")
@@ -226,6 +232,9 @@ func (m *manager) parseAndCacheUser(ctx context.Context, userData map[string]int
 }
 
 func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingGroups bool) (*userpb.User, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUser")
+	defer span.End()
+
 	u, err := m.fetchCachedUserDetails(uid)
 	if err != nil {
 		return nil, err
@@ -243,6 +252,9 @@ func (m *manager) GetUser(ctx context.Context, uid *userpb.UserId, skipFetchingG
 }
 
 func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipFetchingGroups bool) (*userpb.User, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserByClaim")
+	defer span.End()
+
 	u, err := m.fetchCachedUserByParam(claim, value)
 	if err != nil {
 		return nil, err
@@ -260,6 +272,9 @@ func (m *manager) GetUserByClaim(ctx context.Context, claim, value string, skipF
 }
 
 func (m *manager) FindUsers(ctx context.Context, query string, skipFetchingGroups bool) ([]*userpb.User, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindUsers")
+	defer span.End()
+
 	// Look at namespaces filters. If the query starts with:
 	// "a" => look into primary/secondary/service accounts
 	// "l" => look into lightweight/federated accounts
@@ -310,6 +325,9 @@ func isUserAnyType(user *userpb.User, types []userpb.UserType) bool {
 }
 
 func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserGroups")
+	defer span.End()
+
 	groups, err := m.fetchCachedUserGroups(uid)
 	if err == nil {
 		return groups, nil
@@ -344,6 +362,9 @@ func (m *manager) GetUserGroups(ctx context.Context, uid *userpb.UserId) ([]stri
 }
 
 func (m *manager) IsInGroup(ctx context.Context, uid *userpb.UserId, group string) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "IsInGroup")
+	defer span.End()
+
 	userGroups, err := m.GetUserGroups(ctx, uid)
 	if err != nil {
 		return false, err

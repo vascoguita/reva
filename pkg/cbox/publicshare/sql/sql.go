@@ -40,11 +40,14 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const tracerName = "sql"
 
 const (
 	publicShareType = 3
@@ -128,6 +131,9 @@ func New(m map[string]interface{}) (publicshare.Manager, error) {
 }
 
 func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *provider.ResourceInfo, g *link.Grant, description string, internal bool) (*link.PublicShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreatePublicShare")
+	defer span.End()
+
 	tkn := utils.RandString(15)
 	now := time.Now().Unix()
 
@@ -209,6 +215,9 @@ func (m *manager) CreatePublicShare(ctx context.Context, u *user.User, rInfo *pr
 }
 
 func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link.UpdatePublicShareRequest, g *link.Grant) (*link.PublicShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdatePublicShare")
+	defer span.End()
+
 	query := "update oc_share set "
 	paramsMap := map[string]interface{}{}
 	params := []interface{}{}
@@ -267,6 +276,9 @@ func (m *manager) UpdatePublicShare(ctx context.Context, u *user.User, req *link
 }
 
 func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*link.PublicShare, string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByToken")
+	defer span.End()
+
 	s := conversions.DBShare{Token: token}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND token=?"
 	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
@@ -279,6 +291,9 @@ func (m *manager) getByToken(ctx context.Context, token string, u *user.User) (*
 }
 
 func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.User) (*link.PublicShare, string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getByID")
+	defer span.End()
+
 	uid := conversions.FormatUserID(u.Id)
 	s := conversions.DBShare{ID: id.OpaqueId}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND share_type=? AND id=? AND (uid_owner=? OR uid_initiator=?)"
@@ -292,6 +307,9 @@ func (m *manager) getByID(ctx context.Context, id *link.PublicShareId, u *user.U
 }
 
 func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference, sign bool) (*link.PublicShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShare")
+	defer span.End()
+
 	var s *link.PublicShare
 	var pw string
 	var err error
@@ -324,6 +342,9 @@ func (m *manager) GetPublicShare(ctx context.Context, u *user.User, ref *link.Pu
 }
 
 func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter, md *provider.ResourceInfo, sign bool) ([]*link.PublicShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListPublicShares")
+	defer span.End()
+
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(token,'') as token, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE (orphan = 0 or orphan IS NULL) AND (share_type=?) AND internal=false"
 	var resourceFilters, ownerFilters, creatorFilters string
 	var resourceParams, ownerParams, creatorParams []interface{}
@@ -405,6 +426,9 @@ func (m *manager) ListPublicShares(ctx context.Context, u *user.User, filters []
 }
 
 func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link.PublicShareReference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RevokePublicShare")
+	defer span.End()
+
 	uid := conversions.FormatUserID(u.Id)
 	query := "delete from oc_share where "
 	params := []interface{}{}
@@ -440,6 +464,9 @@ func (m *manager) RevokePublicShare(ctx context.Context, u *user.User, ref *link
 }
 
 func (m *manager) GetPublicShareByToken(ctx context.Context, token string, auth *link.PublicShareAuthentication, sign bool) (*link.PublicShare, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShareByToken")
+	defer span.End()
+
 	s := conversions.DBShare{Token: token}
 	query := "select coalesce(uid_owner, '') as uid_owner, coalesce(uid_initiator, '') as uid_initiator, coalesce(share_with, '') as share_with, coalesce(fileid_prefix, '') as fileid_prefix, coalesce(item_source, '') as item_source, coalesce(item_type, '') as item_type, coalesce(expiration, '') as expiration, coalesce(share_name, '') as share_name, id, stime, permissions, quicklink, description FROM oc_share WHERE share_type=? AND token=?"
 	if err := m.db.QueryRow(query, publicShareType, token).Scan(&s.UIDOwner, &s.UIDInitiator, &s.ShareWith, &s.Prefix, &s.ItemSource, &s.ItemType, &s.Expiration, &s.ShareName, &s.ID, &s.STime, &s.Permissions, &s.Quicklink, &s.Description); err != nil {
@@ -490,12 +517,15 @@ func (m *manager) cleanupExpiredShares() error {
 }
 
 func (m *manager) uidOwnerFilters(ctx context.Context, u *user.User, filters []*link.ListPublicSharesRequest_Filter) (string, []interface{}, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "uidOwnerFilters")
+	defer span.End()
+
 	uid := conversions.FormatUserID(u.Id)
 
 	query := "uid_owner=? or uid_initiator=?"
 	params := []interface{}{uid, uid}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(m.c.GatewaySvc))
 	if err != nil {
 		return "", nil, err
 	}

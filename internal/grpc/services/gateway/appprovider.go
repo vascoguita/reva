@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -45,6 +46,9 @@ import (
 )
 
 func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "OpenInApp")
+	defer span.End()
+
 	p, st := s.getPath(ctx, req.Ref)
 	if st.Code != rpc.Code_CODE_OK {
 		if st.Code == rpc.Code_CODE_NOT_FOUND {
@@ -119,6 +123,9 @@ func (s *svc) OpenInApp(ctx context.Context, req *gateway.OpenInAppRequest) (*pr
 
 func (s *svc) openFederatedShares(ctx context.Context, targetURL string, req *gateway.OpenInAppRequest,
 	insecure, skipVerify bool, nameQueries ...string) (*providerpb.OpenInAppResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "openFederatedShares")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
@@ -170,6 +177,9 @@ func (s *svc) openFederatedShares(ctx context.Context, targetURL string, req *ga
 }
 
 func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.ResourceInfo, req *gateway.OpenInAppRequest) (*providerpb.OpenInAppResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "openLocalResources")
+	defer span.End()
+
 	accessToken, ok := ctxpkg.ContextGetToken(ctx)
 	if !ok || accessToken == "" {
 		return &providerpb.OpenInAppResponse{
@@ -188,7 +198,7 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 		return nil, err
 	}
 
-	appProviderClient, err := pool.GetAppProviderClient(pool.Endpoint(provider.Address))
+	appProviderClient, err := pool.GetAppProviderClient(ctx, pool.Endpoint(provider.Address))
 	if err != nil {
 		return nil, errors.Wrap(err, "gateway: error calling GetAppProviderClient")
 	}
@@ -209,7 +219,10 @@ func (s *svc) openLocalResources(ctx context.Context, ri *storageprovider.Resour
 }
 
 func (s *svc) findAppProvider(ctx context.Context, ri *storageprovider.ResourceInfo, app string) (*registry.ProviderInfo, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "findAppProvider")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error getting appregistry client")
 		return nil, err

@@ -26,10 +26,14 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreatePublicShare")
+	defer span.End()
+
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't create a public share of the share folder itself")
 	}
@@ -37,7 +41,7 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("create public share")
 
-	c, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	c, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -51,10 +55,13 @@ func (s *svc) CreatePublicShare(ctx context.Context, req *link.CreatePublicShare
 }
 
 func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemovePublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("remove public share")
 
-	driver, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	driver, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -66,10 +73,13 @@ func (s *svc) RemovePublicShare(ctx context.Context, req *link.RemovePublicShare
 }
 
 func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShareByToken")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share by token")
 
-	driver, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	driver, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		return nil, err
 	}
@@ -83,10 +93,13 @@ func (s *svc) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShar
 }
 
 func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("get public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.GetPublicShareResponse{
@@ -100,10 +113,13 @@ func (s *svc) GetPublicShare(ctx context.Context, req *link.GetPublicShareReques
 }
 
 func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListPublicShares")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("listing public shares")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.ListPublicSharesResponse{
@@ -122,10 +138,13 @@ func (s *svc) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRe
 }
 
 func (s *svc) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdatePublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("update public share")
 
-	pClient, err := pool.GetPublicShareProviderClient(pool.Endpoint(s.c.PublicShareProviderEndpoint))
+	pClient, err := pool.GetPublicShareProviderClient(ctx, pool.Endpoint(s.c.PublicShareProviderEndpoint))
 	if err != nil {
 		log.Err(err).Msg("error connecting to a public share provider")
 		return &link.UpdatePublicShareResponse{

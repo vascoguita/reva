@@ -24,11 +24,15 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/app/registry/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProvidersRequest) (*registry.GetAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppProviders")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetAppProvidersResponse{
@@ -45,7 +49,10 @@ func (s *svc) GetAppProviders(ctx context.Context, req *registry.GetAppProviders
 }
 
 func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRequest) (*registry.AddAppProviderResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddAppProvider")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.AddAppProviderResponse{
@@ -62,7 +69,10 @@ func (s *svc) AddAppProvider(ctx context.Context, req *registry.AddAppProviderRe
 }
 
 func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvidersRequest) (*registry.ListAppProvidersResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAppProviders")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListAppProvidersResponse{
@@ -79,7 +89,10 @@ func (s *svc) ListAppProviders(ctx context.Context, req *registry.ListAppProvide
 }
 
 func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupportedMimeTypesRequest) (*registry.ListSupportedMimeTypesResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListSupportedMimeTypes")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.ListSupportedMimeTypesResponse{
@@ -96,7 +109,10 @@ func (s *svc) ListSupportedMimeTypes(ctx context.Context, req *registry.ListSupp
 }
 
 func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registry.GetDefaultAppProviderForMimeTypeRequest) (*registry.GetDefaultAppProviderForMimeTypeResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetDefaultAppProviderForMimeType")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.GetDefaultAppProviderForMimeTypeResponse{
@@ -113,7 +129,10 @@ func (s *svc) GetDefaultAppProviderForMimeType(ctx context.Context, req *registr
 }
 
 func (s *svc) SetDefaultAppProviderForMimeType(ctx context.Context, req *registry.SetDefaultAppProviderForMimeTypeRequest) (*registry.SetDefaultAppProviderForMimeTypeResponse, error) {
-	c, err := pool.GetAppRegistryClient(pool.Endpoint(s.c.AppRegistryEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetDefaultAppProviderForMimeType")
+	defer span.End()
+
+	c, err := pool.GetAppRegistryClient(ctx, pool.Endpoint(s.c.AppRegistryEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetAppRegistryClient")
 		return &registry.SetDefaultAppProviderForMimeTypeResponse{

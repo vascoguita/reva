@@ -44,12 +44,10 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/share"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -69,11 +67,10 @@ const (
 
 // ns is the namespace that is prefixed to the path in the cs3 namespace.
 func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), fmt.Sprintf("%s %v", r.Method, r.URL.Path))
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathPropfind")
 	defer span.End()
 
-	span.SetAttributes(attribute.String("component", "ocdav"))
-
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -87,18 +84,19 @@ func (s *svc) handlePathPropfind(w http.ResponseWriter, r *http.Request, ns stri
 
 	ref := &provider.Reference{Path: fn}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, false, sublog)
+	parentInfo, resourceInfos, ok := s.getResourceInfos(w, r, pf, ref, false, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
 	}
-	s.propfindResponse(ctx, w, r, ns, pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(w, r, ns, pf, parentInfo, resourceInfos, sublog)
 }
 
 func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_propfind")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesPropfind")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
 	pf, status, err := readPropfind(r.Body)
@@ -117,11 +115,11 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
 
-	parentInfo, resourceInfos, ok := s.getResourceInfos(ctx, w, r, pf, ref, true, sublog)
+	parentInfo, resourceInfos, ok := s.getResourceInfos(w, r, pf, ref, true, sublog)
 	if !ok {
 		// getResourceInfos handles responses in case of an error so we can just return here.
 		return
@@ -139,13 +137,14 @@ func (s *svc) handleSpacesPropfind(w http.ResponseWriter, r *http.Request, space
 		resourceInfos[i].Path = path.Join("/", spaceID, resourceInfos[i].Path)
 	}
 
-	s.propfindResponse(ctx, w, r, "", pf, parentInfo, resourceInfos, sublog)
+	s.propfindResponse(w, r, "", pf, parentInfo, resourceInfos, sublog)
 }
 
-func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(ctx, "propfind_response")
+func (s *svc) propfindResponse(w http.ResponseWriter, r *http.Request, namespace string, pf propfindXML, parentInfo *provider.ResourceInfo, resourceInfos []*provider.ResourceInfo, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "propfindResponse")
 	defer span.End()
 
+	ctx := r.Context()
 	linkFilters := make([]*link.ListPublicSharesRequest_Filter, 0, len(resourceInfos))
 	shareFilters := make([]*collaboration.Filter, 0, len(resourceInfos))
 	for i := range resourceInfos {
@@ -153,7 +152,7 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		shareFilters = append(shareFilters, share.ResourceIDFilter(resourceInfos[i].Id))
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -169,7 +168,6 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list public shares")
-		span.SetStatus(codes.Error, err.Error())
 	}
 
 	var usershares map[string]struct{}
@@ -181,7 +179,6 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 	} else {
 		log.Error().Err(err).Msg("propfindResponse: couldn't list user shares")
-		span.SetStatus(codes.Error, err.Error())
 	}
 
 	propRes, err := s.multistatusResponse(ctx, &pf, resourceInfos, namespace, usershares, linkshares)
@@ -212,7 +209,11 @@ func (s *svc) propfindResponse(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 }
 
-func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+func (s *svc) getResourceInfos(w http.ResponseWriter, r *http.Request, pf propfindXML, ref *provider.Reference, spacesPropfind bool, log zerolog.Logger) (*provider.ResourceInfo, []*provider.ResourceInfo, bool) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "getResourceInfos")
+	defer span.End()
+
+	ctx := r.Context()
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -226,11 +227,11 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(&log, w, b, err)
+		HandleWebdavError(ctx, &log, w, b, err)
 		return nil, nil, false
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -270,10 +271,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				code:    SabredavNotFound,
 				message: m,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 			return nil, nil, false
 		}
-		HandleErrorStatus(&log, w, res.Status)
+		HandleErrorStatus(ctx, &log, w, res.Status)
 		return nil, nil, false
 	}
 
@@ -310,10 +311,10 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 					code:    SabredavNotFound,
 					message: m,
 				})
-				HandleWebdavError(&log, w, b, err)
+				HandleWebdavError(ctx, &log, w, b, err)
 				return nil, nil, false
 			}
-			HandleErrorStatus(&log, w, parentRes.Status)
+			HandleErrorStatus(ctx, &log, w, parentRes.Status)
 			return nil, nil, false
 		}
 		parentInfo = parentRes.Info
@@ -331,7 +332,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 		}
 
 		if res.Status.Code != rpc.Code_CODE_OK {
-			HandleErrorStatus(&log, w, res.Status)
+			HandleErrorStatus(ctx, &log, w, res.Status)
 			return nil, nil, false
 		}
 		resourceInfos = append(resourceInfos, res.Infos...)
@@ -364,7 +365,7 @@ func (s *svc) getResourceInfos(ctx context.Context, w http.ResponseWriter, r *ht
 				return nil, nil, false
 			}
 			if res.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&log, w, res.Status)
+				HandleErrorStatus(ctx, &log, w, res.Status)
 				return nil, nil, false
 			}
 
@@ -450,6 +451,9 @@ func readPropfind(r io.Reader) (pf propfindXML, status int, err error) {
 }
 
 func (s *svc) multistatusResponse(ctx context.Context, pf *propfindXML, mds []*provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "multistatusResponse")
+	defer span.End()
+
 	responses := make([]*responseXML, 0, len(mds))
 	for i := range mds {
 		res, err := s.mdToPropResponse(ctx, pf, mds[i], ns, usershares, linkshares)
@@ -505,6 +509,9 @@ func (s *svc) newPropRaw(key, val string) *propertyXML {
 // ns is the CS3 namespace that needs to be removed from the CS3 path before
 // prefixing it with the baseURI.
 func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provider.ResourceInfo, ns string, usershares, linkshares map[string]struct{}) (*responseXML, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "mdToPropResponse")
+	defer span.End()
+
 	sublog := appctx.GetLogger(ctx).With().Str("ns", ns).Logger()
 	md.Path = strings.TrimPrefix(md.Path, ns)
 
@@ -516,7 +523,7 @@ func (s *svc) mdToPropResponse(ctx context.Context, pf *propfindXML, md *provide
 	}
 
 	response := responseXML{
-		Href:     encodePath(ref),
+		Href:     encodePath(ctx, ref),
 		Propstat: []propstatXML{},
 	}
 
@@ -1022,6 +1029,9 @@ func quoteEtag(etag string) string {
 
 // a file is only yours if you are the owner.
 func isCurrentUserOwner(ctx context.Context, owner *userv1beta1.UserId) bool {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "isCurrentUserOwner")
+	defer span.End()
+
 	contextUser, ok := ctxpkg.ContextGetUser(ctx)
 	if ok && contextUser.Id != nil && owner != nil &&
 		contextUser.Id.Idp == owner.Idp &&

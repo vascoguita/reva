@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
@@ -38,6 +39,9 @@ func (h *MetaHandler) init(c *Config) error {
 // Handler handles requests.
 func (h *MetaHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Meta HTTP Handler")
+		defer span.End()
+
 		var id string
 		id, r.URL.Path = router.ShiftPath(r.URL.Path)
 		if id == "" {

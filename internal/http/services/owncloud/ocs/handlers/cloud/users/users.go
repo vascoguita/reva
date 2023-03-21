@@ -33,8 +33,11 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 )
+
+const tracerName = "users"
 
 // Handler renders user data for the user id given in the url path.
 type Handler struct {
@@ -49,6 +52,9 @@ func (h *Handler) Init(c *config.Config) {
 // GetGroups handles GET requests on /cloud/users/groups
 // TODO: implement.
 func (h *Handler) GetGroups(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetGroups")
+	defer span.End()
+
 	response.WriteOCSSuccess(w, r, &Groups{})
 }
 
@@ -81,6 +87,9 @@ type Groups struct {
 // Only allow self-read currently. TODO: List Users and Get on other users (both require
 // administrative privileges).
 func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetUsers")
+	defer span.End()
+
 	ctx := r.Context()
 	sublog := appctx.GetLogger(r.Context())
 
@@ -97,7 +106,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -115,7 +124,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-			ocdav.HandleErrorStatus(sublog, w, getHomeRes.Status)
+			ocdav.HandleErrorStatus(ctx, sublog, w, getHomeRes.Status)
 			return
 		}
 
@@ -127,7 +136,7 @@ func (h *Handler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if getQuotaRes.Status.Code != rpc.Code_CODE_OK {
-			ocdav.HandleErrorStatus(sublog, w, getQuotaRes.Status)
+			ocdav.HandleErrorStatus(ctx, sublog, w, getQuotaRes.Status)
 			return
 		}
 		total = getQuotaRes.TotalBytes

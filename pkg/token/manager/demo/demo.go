@@ -28,8 +28,11 @@ import (
 	user "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/token"
 	"github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "demo"
 
 func init() {
 	registry.Register("demo", New)
@@ -49,6 +52,9 @@ type claims struct {
 }
 
 func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]*auth.Scope) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "MintToken")
+	defer span.End()
+
 	token, err := encode(&claims{u, scope})
 	if err != nil {
 		return "", errors.Wrap(err, "error encoding user")
@@ -57,6 +63,9 @@ func (m *manager) MintToken(ctx context.Context, u *user.User, scope map[string]
 }
 
 func (m *manager) DismantleToken(ctx context.Context, token string) (*user.User, map[string]*auth.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DismantleToken")
+	defer span.End()
+
 	c, err := decode(token)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "error decoding claims")

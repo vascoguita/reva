@@ -57,9 +57,12 @@ import (
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "eosfs"
 
 const (
 	refTargetAttrKey = "reva.target"
@@ -266,11 +269,17 @@ func (fs *eosfs) userIDcacheWarmup() {
 }
 
 func (fs *eosfs) Shutdown(ctx context.Context) error {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "Shutdown")
+	defer span.End()
+
 	// TODO(labkode): in a grpc implementation we can close connections.
 	return nil
 }
 
 func getUser(ctx context.Context) (*userpb.User, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUser")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired(""), "eosfs: error getting user from ctx")
@@ -280,6 +289,9 @@ func getUser(ctx context.Context) (*userpb.User, error) {
 }
 
 func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getLayout")
+	defer span.End()
+
 	if fs.conf.EnableHome {
 		u, err := getUser(ctx)
 		if err != nil {
@@ -291,6 +303,9 @@ func (fs *eosfs) getLayout(ctx context.Context) (layout string) {
 }
 
 func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getInternalHome")
+	defer span.End()
+
 	if !fs.conf.EnableHome {
 		return "", errtypes.NotSupported("eos: get home not supported")
 	}
@@ -306,6 +321,9 @@ func (fs *eosfs) getInternalHome(ctx context.Context) (string, error) {
 }
 
 func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "wrapShadow")
+	defer span.End()
+
 	if fs.conf.EnableHome {
 		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
@@ -319,6 +337,9 @@ func (fs *eosfs) wrapShadow(ctx context.Context, fn string) (internal string) {
 }
 
 func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "wrap")
+	defer span.End()
+
 	if fs.conf.EnableHome {
 		layout, err := fs.getInternalHome(ctx)
 		if err != nil {
@@ -334,6 +355,9 @@ func (fs *eosfs) wrap(ctx context.Context, fn string) (internal string) {
 }
 
 func (fs *eosfs) unwrap(ctx context.Context, internal string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "unwrap")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	layout := fs.getLayout(ctx)
 	ns, err := fs.getNsMatch(internal, []string{fs.conf.Namespace, fs.conf.ShadowNamespace})
@@ -365,6 +389,9 @@ func (fs *eosfs) getNsMatch(internal string, nss []string) (string, error) {
 }
 
 func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (string, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "unwrapInternal")
+	defer span.End()
+
 	trim := path.Join(ns, layout)
 
 	if !strings.HasPrefix(np, trim) {
@@ -381,6 +408,9 @@ func (fs *eosfs) unwrapInternal(ctx context.Context, ns, np, layout string) (str
 }
 
 func (fs *eosfs) resolveRefForbidShareFolder(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolveRefForbidShareFolder")
+	defer span.End()
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
@@ -403,6 +433,9 @@ func (fs *eosfs) resolveRefForbidShareFolder(ctx context.Context, ref *provider.
 }
 
 func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Reference) (string, eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolveRefAndGetAuth")
+	defer span.End()
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return "", eosclient.Authorization{}, errors.Wrap(err, "eosfs: error resolving reference")
@@ -423,6 +456,9 @@ func (fs *eosfs) resolveRefAndGetAuth(ctx context.Context, ref *provider.Referen
 
 // resolve takes in a request path or request id and returns the unwrapped path.
 func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolve")
+	defer span.End()
+
 	if ref.ResourceId != nil {
 		p, err := fs.getPath(ctx, ref.ResourceId)
 		if err != nil {
@@ -440,6 +476,9 @@ func (fs *eosfs) resolve(ctx context.Context, ref *provider.Reference) (string, 
 }
 
 func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getPath")
+	defer span.End()
+
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
 		return "", fmt.Errorf("error converting string to int for eos fileid: %s", id.OpaqueId)
@@ -459,20 +498,32 @@ func (fs *eosfs) getPath(ctx context.Context, id *provider.ResourceId) (string, 
 }
 
 func (fs *eosfs) isShareFolder(ctx context.Context, p string) bool {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "isShareFolder")
+	defer span.End()
+
 	return strings.HasPrefix(p, fs.conf.ShareFolder)
 }
 
 func (fs *eosfs) isShareFolderRoot(ctx context.Context, p string) bool {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "isShareFolderRoot")
+	defer span.End()
+
 	return path.Clean(p) == fs.conf.ShareFolder
 }
 
 func (fs *eosfs) isShareFolderChild(ctx context.Context, p string) bool {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "isShareFolderChild")
+	defer span.End()
+
 	p = path.Clean(p)
 	vals := strings.Split(p, fs.conf.ShareFolder+"/")
 	return len(vals) > 1 && vals[1] != ""
 }
 
 func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPathByID")
+	defer span.End()
+
 	fid, err := strconv.ParseUint(id.OpaqueId, 10, 64)
 	if err != nil {
 		return "", errors.Wrap(err, "eosfs: error parsing fileid string")
@@ -511,6 +562,9 @@ func (fs *eosfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (stri
 }
 
 func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	if len(md.Metadata) == 0 {
 		return errtypes.BadRequest("eosfs: no metadata set")
 	}
@@ -547,6 +601,9 @@ func (fs *eosfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Referen
 }
 
 func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	if len(keys) == 0 {
 		return errtypes.BadRequest("eosfs: no keys set")
 	}
@@ -575,6 +632,9 @@ func (fs *eosfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Refer
 }
 
 func (fs *eosfs) getLockExpiration(ctx context.Context, auth eosclient.Authorization, path string) (*types.Timestamp, bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getLockExpiration")
+	defer span.End()
+
 	expiration, err := fs.c.GetAttr(ctx, auth, "sys."+LockExpirationKey, path)
 	if err != nil {
 		// since the expiration is optional, if we do not find it in the attr
@@ -597,6 +657,9 @@ func (fs *eosfs) getLockExpiration(ctx context.Context, auth eosclient.Authoriza
 }
 
 func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorization, path string, expiration *types.Timestamp) (*provider.Lock, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getLockContent")
+	defer span.End()
+
 	t, err := fs.c.GetAttr(ctx, auth, "sys."+LockTypeKey, path)
 	if err != nil {
 		return nil, err
@@ -628,6 +691,9 @@ func (fs *eosfs) getLockContent(ctx context.Context, auth eosclient.Authorizatio
 }
 
 func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorization, path string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "removeLockAttrs")
+	defer span.End()
+
 	err := fs.c.UnsetAttr(ctx, auth, &eosclient.Attribute{
 		Type: SystemAttr,
 		Key:  LockExpirationKey,
@@ -660,6 +726,9 @@ func (fs *eosfs) removeLockAttrs(ctx context.Context, auth eosclient.Authorizati
 }
 
 func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user *userpb.User, path string, ref *provider.Reference) (*provider.Lock, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getLock")
+	defer span.End()
+
 	// the cs3apis require to have the read permission on the resource
 	// to get the eventual lock.
 	has, err := fs.userHasReadAccess(ctx, user, ref)
@@ -694,6 +763,9 @@ func (fs *eosfs) getLock(ctx context.Context, auth eosclient.Authorization, user
 
 // GetLock returns an existing lock on the given reference.
 func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	path, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -713,6 +785,9 @@ func (fs *eosfs) GetLock(ctx context.Context, ref *provider.Reference) (*provide
 }
 
 func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string, check bool) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "setLock")
+	defer span.End()
+
 	auth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return err
@@ -762,6 +837,9 @@ func (fs *eosfs) setLock(ctx context.Context, lock *provider.Lock, path string, 
 
 // SetLock puts a lock on the given reference.
 func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	if l.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
@@ -821,7 +899,10 @@ func (fs *eosfs) SetLock(ctx context.Context, ref *provider.Reference, l *provid
 }
 
 func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*userpb.User, error) {
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUserFromID")
+	defer span.End()
+
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}
@@ -839,6 +920,9 @@ func (fs *eosfs) getUserFromID(ctx context.Context, userID *userpb.UserId) (*use
 }
 
 func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "userHasWriteAccess")
+	defer span.End()
+
 	ctx = ctxpkg.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
@@ -848,6 +932,9 @@ func (fs *eosfs) userHasWriteAccess(ctx context.Context, user *userpb.User, ref 
 }
 
 func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId, ref *provider.Reference) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "userIDHasWriteAccess")
+	defer span.End()
+
 	user, err := fs.getUserFromID(ctx, userID)
 	if err != nil {
 		return false, nil
@@ -856,6 +943,9 @@ func (fs *eosfs) userIDHasWriteAccess(ctx context.Context, userID *userpb.UserId
 }
 
 func (fs *eosfs) userHasReadAccess(ctx context.Context, user *userpb.User, ref *provider.Reference) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "userHasReadAccess")
+	defer span.End()
+
 	ctx = ctxpkg.ContextSetUser(ctx, user)
 	resInfo, err := fs.GetMD(ctx, ref, nil)
 	if err != nil {
@@ -874,6 +964,9 @@ func encodeLock(l *provider.Lock) (string, error) {
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (fs *eosfs) RefreshLock(ctx context.Context, ref *provider.Reference, newLock *provider.Lock, existingLockID string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	if newLock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
@@ -935,6 +1028,9 @@ func sameHolder(l1, l2 *provider.Lock) bool {
 
 // Unlock removes an existing lock from the given reference.
 func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	if lock.Type == provider.LockType_LOCK_TYPE_SHARED {
 		return errtypes.NotSupported("shared lock not yet implemented")
 	}
@@ -988,6 +1084,9 @@ func (fs *eosfs) Unlock(ctx context.Context, ref *provider.Reference, lock *prov
 }
 
 func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddGrant")
+	defer span.End()
+
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
@@ -1027,6 +1126,9 @@ func (fs *eosfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provi
 }
 
 func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
@@ -1058,6 +1160,9 @@ func (fs *eosfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *prov
 }
 
 func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getEosACL")
+	defer span.End()
+
 	permissions, err := grants.GetACLPerm(g.Permissions)
 	if err != nil {
 		return nil, err
@@ -1096,6 +1201,9 @@ func (fs *eosfs) getEosACL(ctx context.Context, g *provider.Grant) (*acl.Entry, 
 }
 
 func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveGrant")
+	defer span.End()
+
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
 	if err != nil {
 		return err
@@ -1127,10 +1235,16 @@ func (fs *eosfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *pr
 }
 
 func (fs *eosfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateGrant")
+	defer span.End()
+
 	return fs.AddGrant(ctx, ref, g)
 }
 
 func (fs *eosfs) convertACLsToGrants(ctx context.Context, acls *acl.ACLs) ([]*provider.Grant, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertACLsToGrants")
+	defer span.End()
+
 	res := make([]*provider.Grant, 0, len(acls.Entries))
 	for _, a := range acls.Entries {
 		var grantee *provider.Grantee
@@ -1219,6 +1333,9 @@ func (fs *eosfs) ListGrants(ctx context.Context, ref *provider.Reference) ([]*pr
 }
 
 func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMD")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Msg("eosfs: get md for ref:" + ref.String())
 
@@ -1275,6 +1392,9 @@ func (fs *eosfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []st
 }
 
 func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getMDShareFolder")
+	defer span.End()
+
 	fn := fs.wrapShadow(ctx, p)
 
 	u, err := getUser(ctx)
@@ -1300,6 +1420,9 @@ func (fs *eosfs) getMDShareFolder(ctx context.Context, p string, mdKeys []string
 }
 
 func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFolder")
+	defer span.End()
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error resolving reference")
@@ -1313,6 +1436,9 @@ func (fs *eosfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys
 }
 
 func (fs *eosfs) listWithHome(ctx context.Context, p string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithHome")
+	defer span.End()
+
 	if fs.isShareFolderRoot(ctx, p) {
 		return fs.listShareFolderRoot(ctx, p)
 	}
@@ -1326,6 +1452,9 @@ func (fs *eosfs) listWithHome(ctx context.Context, p string) ([]*provider.Resour
 }
 
 func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithNominalHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	fn := fs.wrap(ctx, p)
 
@@ -1364,6 +1493,9 @@ func (fs *eosfs) listWithNominalHome(ctx context.Context, p string) (finfos []*p
 }
 
 func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*provider.ResourceInfo, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listShareFolderRoot")
+	defer span.End()
+
 	fn := fs.wrapShadow(ctx, p)
 
 	u, err := getUser(ctx)
@@ -1400,10 +1532,16 @@ func (fs *eosfs) listShareFolderRoot(ctx context.Context, p string) (finfos []*p
 
 // CreateStorageSpace creates a storage space.
 func (fs *eosfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64, uint64, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetQuota")
+	defer span.End()
+
 	u, err := getUser(ctx)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "eosfs: no user in ctx")
@@ -1429,6 +1567,9 @@ func (fs *eosfs) GetQuota(ctx context.Context, ref *provider.Reference) (uint64,
 }
 
 func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	if !fs.conf.EnableHome {
 		return "", errtypes.NotSupported("eosfs: get home not supported")
 	}
@@ -1438,6 +1579,9 @@ func (fs *eosfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *eosfs) createShadowHome(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createShadowHome")
+	defer span.End()
+
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1467,6 +1611,9 @@ func (fs *eosfs) createShadowHome(ctx context.Context) error {
 }
 
 func (fs *eosfs) createNominalHome(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createNominalHome")
+	defer span.End()
+
 	home := fs.wrap(ctx, "/")
 
 	u, err := getUser(ctx)
@@ -1524,6 +1671,9 @@ func (fs *eosfs) createNominalHome(ctx context.Context) error {
 }
 
 func (fs *eosfs) CreateHome(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	if !fs.conf.EnableHome {
 		return errtypes.NotSupported("eosfs: create home not supported")
 	}
@@ -1545,6 +1695,9 @@ func (fs *eosfs) runPostCreateHomeHook(ctx context.Context) error {
 }
 
 func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string, recursiveAttr bool) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createUserDir")
+	defer span.End()
+
 	rootAuth, err := fs.getRootAuth(ctx)
 	if err != nil {
 		return nil
@@ -1605,6 +1758,9 @@ func (fs *eosfs) createUserDir(ctx context.Context, u *userpb.User, path string,
 }
 
 func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateDir")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
@@ -1633,6 +1789,9 @@ func (fs *eosfs) CreateDir(ctx context.Context, ref *provider.Reference) error {
 
 // TouchFile as defined in the storage.FS interface.
 func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	fn, auth, err := fs.resolveRefAndGetAuth(ctx, ref)
@@ -1645,6 +1804,9 @@ func (fs *eosfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.URL) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateReference")
+	defer span.End()
+
 	// TODO(labkode): for the time being we only allow creating references
 	// in the virtual share folder to not pollute the nominal user tree.
 	if !fs.isShareFolder(ctx, p) {
@@ -1693,6 +1855,9 @@ func (fs *eosfs) CreateReference(ctx context.Context, p string, targetURI *url.U
 }
 
 func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
+	defer span.End()
+
 	p, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -1717,6 +1882,9 @@ func (fs *eosfs) Delete(ctx context.Context, ref *provider.Reference) error {
 }
 
 func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "deleteShadow")
+	defer span.End()
+
 	if fs.isShareFolderRoot(ctx, p) {
 		return errtypes.PermissionDenied("eosfs: cannot delete the virtual share folder")
 	}
@@ -1739,6 +1907,9 @@ func (fs *eosfs) deleteShadow(ctx context.Context, p string) error {
 }
 
 func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
+	defer span.End()
+
 	oldPath, err := fs.resolve(ctx, oldRef)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: error resolving reference")
@@ -1769,6 +1940,9 @@ func (fs *eosfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) e
 }
 
 func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "moveShadow")
+	defer span.End()
+
 	if fs.isShareFolderRoot(ctx, oldPath) || fs.isShareFolderRoot(ctx, newPath) {
 		return errtypes.PermissionDenied("eosfs: cannot move/rename the virtual share folder")
 	}
@@ -1797,6 +1971,9 @@ func (fs *eosfs) moveShadow(ctx context.Context, oldPath, newPath string) error 
 }
 
 func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Download")
+	defer span.End()
+
 	fn, auth, err := fs.resolveRefForbidShareFolder(ctx, ref)
 	if err != nil {
 		return nil, err
@@ -1806,6 +1983,9 @@ func (fs *eosfs) Download(ctx context.Context, ref *provider.Reference) (io.Read
 }
 
 func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRevisions")
+	defer span.End()
+
 	var auth eosclient.Authorization
 	var fn string
 	var err error
@@ -1849,6 +2029,9 @@ func (fs *eosfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]
 }
 
 func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DownloadRevision")
+	defer span.End()
+
 	var auth eosclient.Authorization
 	var fn string
 	var err error
@@ -1882,6 +2065,9 @@ func (fs *eosfs) DownloadRevision(ctx context.Context, ref *provider.Reference, 
 }
 
 func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRevision")
+	defer span.End()
+
 	var auth eosclient.Authorization
 	var fn string
 	var err error
@@ -1915,10 +2101,16 @@ func (fs *eosfs) RestoreRevision(ctx context.Context, ref *provider.Reference, r
 }
 
 func (fs *eosfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycleItem")
+	defer span.End()
+
 	return errtypes.NotSupported("eosfs: operation not supported")
 }
 
 func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "EmptyRecycle")
+	defer span.End()
+
 	u, err := getUser(ctx)
 	if err != nil {
 		return errors.Wrap(err, "eosfs: no user in ctx")
@@ -1932,6 +2124,9 @@ func (fs *eosfs) EmptyRecycle(ctx context.Context) error {
 }
 
 func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
@@ -1982,6 +2177,9 @@ func (fs *eosfs) ListRecycle(ctx context.Context, basePath, key, relativePath st
 }
 
 func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	var auth eosclient.Authorization
 
 	if !fs.conf.EnableHome && fs.conf.AllowPathRecycleOperations && basePath != "/" {
@@ -2016,15 +2214,24 @@ func (fs *eosfs) RestoreRecycleItem(ctx context.Context, basePath, key, relative
 }
 
 func (fs *eosfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space.
 func (fs *eosfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eosclient.DeletedEntry) (*provider.RecycleItem, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToRecycleItem")
+	defer span.End()
+
 	path, err := fs.unwrap(ctx, eosDeletedItem.RestorePath)
 	if err != nil {
 		return nil, err
@@ -2045,6 +2252,9 @@ func (fs *eosfs) convertToRecycleItem(ctx context.Context, eosDeletedItem *eoscl
 }
 
 func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.FileVersion, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToRevision")
+	defer span.End()
+
 	md, err := fs.convertToResourceInfo(ctx, eosFileInfo)
 	if err != nil {
 		return nil, err
@@ -2059,10 +2269,16 @@ func (fs *eosfs) convertToRevision(ctx context.Context, eosFileInfo *eosclient.F
 }
 
 func (fs *eosfs) convertToResourceInfo(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToResourceInfo")
+	defer span.End()
+
 	return fs.convert(ctx, eosFileInfo)
 }
 
 func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToFileReference")
+	defer span.End()
+
 	info, err := fs.convert(ctx, eosFileInfo)
 	if err != nil {
 		return nil, err
@@ -2078,6 +2294,9 @@ func (fs *eosfs) convertToFileReference(ctx context.Context, eosFileInfo *eoscli
 
 // permissionSet returns the permission set for the current user.
 func (fs *eosfs) permissionSet(ctx context.Context, eosFileInfo *eosclient.FileInfo, owner *userpb.UserId) *provider.ResourcePermissions {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "permissionSet")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok || u.Id == nil {
 		return &provider.ResourcePermissions{
@@ -2208,6 +2427,9 @@ func mergePermissions(l *provider.ResourcePermissions, r *provider.ResourcePermi
 }
 
 func (fs *eosfs) convert(ctx context.Context, eosFileInfo *eosclient.FileInfo) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convert")
+	defer span.End()
+
 	path, err := fs.unwrap(ctx, eosFileInfo.File)
 	if err != nil {
 		return nil, err
@@ -2299,13 +2521,16 @@ func (fs *eosfs) extractUIDAndGID(u *userpb.User) (eosclient.Authorization, erro
 }
 
 func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUIDGateway")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if userIDInterface, err := fs.userIDCache.Get(u.OpaqueId); err == nil {
 		log.Debug().Msg("eosfs: found cached user " + u.OpaqueId)
 		return fs.extractUIDAndGID(userIDInterface.(*userpb.User))
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return eosclient.Authorization{}, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
@@ -2327,6 +2552,9 @@ func (fs *eosfs) getUIDGateway(ctx context.Context, u *userpb.UserId) (eosclient
 }
 
 func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.UserId, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUserIDGateway")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	// Handle the case of root
 	if uid == "0" {
@@ -2339,7 +2567,7 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 	}
 
 	log.Debug().Msg("eosfs: retrieving user from gateway for uid " + uid)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(fs.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(fs.conf.GatewaySvc))
 	if err != nil {
 		return nil, errors.Wrap(err, "eosfs: error getting gateway grpc client")
 	}
@@ -2366,6 +2594,9 @@ func (fs *eosfs) getUserIDGateway(ctx context.Context, uid string) (*userpb.User
 }
 
 func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUserAuth")
+	defer span.End()
+
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
 			return fs.singleUserAuth, nil
@@ -2384,6 +2615,9 @@ func (fs *eosfs) getUserAuth(ctx context.Context, u *userpb.User, fn string) (eo
 }
 
 func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getEOSToken")
+	defer span.End()
+
 	if fn == "" {
 		return eosclient.Authorization{}, errtypes.BadRequest("eosfs: path cannot be empty")
 	}
@@ -2436,6 +2670,9 @@ func (fs *eosfs) getEOSToken(ctx context.Context, u *userpb.User, fn string) (eo
 }
 
 func (fs *eosfs) getRootAuth(ctx context.Context) (eosclient.Authorization, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getRootAuth")
+	defer span.End()
+
 	if fs.conf.ForceSingleUserMode {
 		if fs.singleUserAuth.Role.UID != "" && fs.singleUserAuth.Role.GID != "" {
 			return fs.singleUserAuth, nil

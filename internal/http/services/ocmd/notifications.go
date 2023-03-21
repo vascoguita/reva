@@ -20,6 +20,8 @@ package ocmd
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 type notificationsHandler struct {
@@ -30,5 +32,7 @@ func (h *notificationsHandler) init(c *config) {
 
 // SendNotification is used to let the provider know that a user has removed a share.
 func (h *notificationsHandler) SendNotification(w http.ResponseWriter, r *http.Request) {
+	_, span := tracing.SpanStartFromRequest(r, tracerName, "Notifications HTTP Handler")
+	defer span.End()
 	w.WriteHeader(http.StatusNotImplemented)
 }

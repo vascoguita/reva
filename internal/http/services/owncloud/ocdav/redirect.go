@@ -22,9 +22,14 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (s *svc) handleLegacyPath(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleLegacyPath")
+	defer span.End()
+
 	query := r.URL.Query()
 	dir := query.Get("dir")
 	url := s.c.PublicURL + path.Join("#", "/files/list/all", url.PathEscape(dir))

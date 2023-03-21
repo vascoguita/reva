@@ -28,9 +28,13 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "dataprovider"
+const tracerName = "dataprovider"
 
 func init() {
 	global.Register("dataprovider", New)
@@ -55,6 +59,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf    *config
 	handler http.Handler
 	storage storage.FS
@@ -140,6 +145,9 @@ func (s *svc) Handler() http.Handler {
 
 func (s *svc) setHandler() error {
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Dataprovider Service HTTP Handler")
+		defer span.End()
+
 		log := appctx.GetLogger(r.Context())
 		log.Debug().Msgf("dataprovider routing: path=%s", r.URL.Path)
 

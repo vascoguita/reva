@@ -19,6 +19,7 @@
 package sciencemesh
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -35,9 +36,9 @@ type providersHandler struct {
 	gatewayClient gateway.GatewayAPIClient
 }
 
-func (h *providersHandler) init(c *config) error {
+func (h *providersHandler) init(ctx context.Context, c *config) error {
 	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	h.gatewayClient, err = pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return err
 	}

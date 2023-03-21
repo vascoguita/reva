@@ -25,7 +25,10 @@ import (
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "bearer"
 
 func init() {
 	registry.Register("bearer", New)
@@ -40,6 +43,9 @@ func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 }
 
 func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetCredentials")
+	defer span.End()
+
 	// 1. check Authorization header
 	hdr := r.Header.Get("Authorization")
 	token := strings.TrimPrefix(hdr, "Bearer ")
@@ -57,6 +63,9 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "AddWWWAuthenticate")
+	defer span.End()
+
 	// TODO read realm from forwarded header?
 	if realm == "" {
 		// fall back to hostname if not configured

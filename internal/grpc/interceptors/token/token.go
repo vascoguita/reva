@@ -22,14 +22,20 @@ import (
 	"context"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
+
+const tracerName = "token"
 
 // NewUnary returns a new unary interceptor that adds
 // the token to the context.
 func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "token UnaryServerInterceptor")
+		defer span.End()
+
 		md, ok := metadata.FromIncomingContext(ctx)
 		if ok && md != nil {
 			if val, ok := md[ctxpkg.TokenHeader]; ok {
@@ -51,6 +57,8 @@ func NewUnary() grpc.UnaryServerInterceptor {
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "token StreamServerInterceptor")
+		defer span.End()
 
 		md, ok := metadata.FromIncomingContext(ss.Context())
 		if ok && md != nil {
@@ -70,6 +78,9 @@ func NewStream() grpc.StreamServerInterceptor {
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "token newWrappedServerStream")
+	defer span.End()
+
 	return &wrappedServerStream{ServerStream: ss, newCtx: ctx}
 }
 

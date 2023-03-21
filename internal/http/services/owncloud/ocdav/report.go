@@ -28,6 +28,7 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 const (
@@ -36,6 +37,9 @@ const (
 )
 
 func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleReport")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 	// fn := path.Join(ns, r.URL.Path)
@@ -62,9 +66,12 @@ func (s *svc) handleReport(w http.ResponseWriter, r *http.Request, ns string) {
 }
 
 func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSearchFiles) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doSearchFiles")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
-	_, err := s.getClient()
+	_, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -74,6 +81,9 @@ func (s *svc) doSearchFiles(w http.ResponseWriter, r *http.Request, sf *reportSe
 }
 
 func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFilterFiles, namespace string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doFilterFiles")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -87,7 +97,7 @@ func (s *svc) doFilterFiles(w http.ResponseWriter, r *http.Request, ff *reportFi
 			return
 		}
 
-		client, err := s.getClient()
+		client, err := s.getClient(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("error getting gateway client")
 			w.WriteHeader(http.StatusInternalServerError)

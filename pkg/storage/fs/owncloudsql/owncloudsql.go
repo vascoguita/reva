@@ -54,11 +54,14 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/pkg/xattr"
 	"github.com/rs/zerolog/log"
 )
+
+const tracerName = "owncloudsql"
 
 const (
 	// Currently,extended file attributes have four separated
@@ -196,6 +199,9 @@ type owncloudsqlfs struct {
 }
 
 func (fs *owncloudsqlfs) Shutdown(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Shutdown")
+	defer span.End()
+
 	return nil
 }
 
@@ -204,6 +210,9 @@ func (fs *owncloudsqlfs) Shutdown(ctx context.Context) error {
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username.
 func (fs *owncloudsqlfs) toInternalPath(ctx context.Context, sp string) (ip string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toInternalPath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -245,6 +254,9 @@ func (fs *owncloudsqlfs) toInternalPath(ctx context.Context, sp string) (ip stri
 // and prefix the data directory
 // TODO the path handed to a storage provider should not contain the username.
 func (fs *owncloudsqlfs) getVersionsPath(ctx context.Context, ip string) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getVersionsPath")
+	defer span.End()
+
 	// ip = /path/to/data/<username>/files/foo/bar.txt
 	// remove data dir
 	if fs.c.DataDirectory != "/" {
@@ -276,6 +288,9 @@ func (fs *owncloudsqlfs) getVersionsPath(ctx context.Context, ip string) string 
 
 // owncloudsql stores trashed items in the files_trashbin subfolder of a users home.
 func (fs *owncloudsqlfs) getRecyclePath(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getRecyclePath")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -290,6 +305,9 @@ func (fs *owncloudsqlfs) getRecyclePathForUser(user string) (string, error) {
 }
 
 func (fs *owncloudsqlfs) getVersionRecyclePath(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getVersionRecyclePath")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -308,6 +326,9 @@ func (fs *owncloudsqlfs) toDatabasePath(ip string) string {
 }
 
 func (fs *owncloudsqlfs) toStoragePath(ctx context.Context, ip string) (sp string) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "toStoragePath")
+	defer span.End()
+
 	if fs.c.EnableHome {
 		u := ctxpkg.ContextMustGetUser(ctx)
 		layout := templates.WithUser(u, fs.c.UserLayout)
@@ -356,6 +377,9 @@ func (fs *owncloudsqlfs) getOwner(ip string) string {
 
 // TODO cache user lookup.
 func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *userpb.User, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getUser")
+	defer span.End()
+
 	u := ctxpkg.ContextMustGetUser(ctx)
 	// check if username matches and id is set
 	if u.Username == usernameOrID && u.Id != nil && u.Id.OpaqueId != "" {
@@ -368,7 +392,7 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 	// look up at the userprovider
 
 	// parts[0] contains the username or userid. use  user service to look up id
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(fs.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(fs.c.UserProviderEndpoint))
 	if err != nil {
 		appctx.GetLogger(ctx).
 			Error().Err(err).
@@ -413,6 +437,9 @@ func (fs *owncloudsqlfs) getUser(ctx context.Context, usernameOrID string) (id *
 
 // permissionSet returns the permission set for the current user.
 func (fs *owncloudsqlfs) permissionSet(ctx context.Context, owner *userpb.UserId) *provider.ResourcePermissions {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "permissionSet")
+	defer span.End()
+
 	if owner == nil {
 		return &provider.ResourcePermissions{
 			Stat: true,
@@ -489,10 +516,16 @@ func (fs *owncloudsqlfs) getUserStorage(user string) (int, error) {
 
 // CreateStorageSpace creates a storage space.
 func (fs *owncloudsqlfs) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	return nil, fmt.Errorf("unimplemented: CreateStorageSpace")
 }
 
 func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filecache.File, ip string, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToResourceInfo")
+	defer span.End()
+
 	mdKeysMap := make(map[string]struct{})
 	for _, k := range mdKeys {
 		mdKeysMap[k] = struct{}{}
@@ -542,6 +575,9 @@ func (fs *owncloudsqlfs) convertToResourceInfo(ctx context.Context, entry *filec
 
 // GetPathByID returns the storage relative path for the file id, without the internal namespace.
 func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceId) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPathByID")
+	defer span.End()
+
 	ip, err := fs.filecache.Path(id.OpaqueId)
 	if err != nil {
 		return "", err
@@ -564,6 +600,9 @@ func (fs *owncloudsqlfs) GetPathByID(ctx context.Context, id *provider.ResourceI
 
 // resolve takes in a request path or request id and converts it to an internal path.
 func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "resolve")
+	defer span.End()
+
 	if ref.GetResourceId() != nil {
 		p, err := fs.filecache.Path(ref.GetResourceId().OpaqueId)
 		if err != nil {
@@ -589,14 +628,23 @@ func (fs *owncloudsqlfs) resolve(ctx context.Context, ref *provider.Reference) (
 }
 
 func (fs *owncloudsqlfs) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	return errtypes.NotSupported("owncloudsqlfs: deny grant not supported")
 }
 
 func (fs *owncloudsqlfs) AddGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddGrant")
+	defer span.End()
+
 	return errtypes.NotSupported("owncloudsqlfs: add grant not supported")
 }
 
 func (fs *owncloudsqlfs) readPermissions(ctx context.Context, ip string) (p *provider.ResourcePermissions, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readPermissions")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		appctx.GetLogger(ctx).Debug().Str("ipath", ip).Msg("no user in context, returning default permissions")
@@ -637,18 +685,30 @@ func isNotFound(err error) bool {
 }
 
 func (fs *owncloudsqlfs) ListGrants(ctx context.Context, ref *provider.Reference) (grants []*provider.Grant, err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListGrants")
+	defer span.End()
+
 	return []*provider.Grant{}, nil // nop
 }
 
 func (fs *owncloudsqlfs) RemoveGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveGrant")
+	defer span.End()
+
 	return nil // nop
 }
 
 func (fs *owncloudsqlfs) UpdateGrant(ctx context.Context, ref *provider.Reference, g *provider.Grant) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateGrant")
+	defer span.End()
+
 	return nil // nop
 }
 
 func (fs *owncloudsqlfs) CreateHome(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	u, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		err := errors.Wrap(errtypes.UserRequired("userrequired"), "error getting user from ctx")
@@ -658,6 +718,9 @@ func (fs *owncloudsqlfs) CreateHome(ctx context.Context) error {
 }
 
 func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createHomeForUser")
+	defer span.End()
+
 	homePaths := []string{
 		filepath.Join(fs.c.DataDirectory, user),
 		filepath.Join(fs.c.DataDirectory, user, "files"),
@@ -698,6 +761,9 @@ func (fs *owncloudsqlfs) createHomeForUser(ctx context.Context, user string) err
 
 // If home is enabled, the relative home is always the empty string.
 func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	if !fs.c.EnableHome {
 		return "", errtypes.NotSupported("owncloudsql: get home not supported")
 	}
@@ -705,6 +771,9 @@ func (fs *owncloudsqlfs) GetHome(ctx context.Context) (string, error) {
 }
 
 func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateDir")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return err
@@ -764,14 +833,23 @@ func (fs *owncloudsqlfs) CreateDir(ctx context.Context, ref *provider.Reference)
 
 // TouchFile as defined in the storage.FS interface.
 func (fs *owncloudsqlfs) TouchFile(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	return fmt.Errorf("unimplemented: TouchFile")
 }
 
 func (fs *owncloudsqlfs) CreateReference(ctx context.Context, sp string, targetURI *url.URL) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateReference")
+	defer span.End()
+
 	return errtypes.NotSupported("owncloudsql: operation not supported")
 }
 
 func (fs *owncloudsqlfs) setMtime(ctx context.Context, ip string, mtime string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "setMtime")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if mt, err := parseMTime(mtime); err == nil {
 		// updating mtime also updates atime
@@ -792,6 +870,9 @@ func (fs *owncloudsqlfs) setMtime(ctx context.Context, ip string, mtime string) 
 	return nil
 }
 func (fs *owncloudsqlfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -935,6 +1016,9 @@ func parseMTime(v string) (t time.Time, err error) {
 }
 
 func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provider.Reference, keys []string) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	var ip string
@@ -1022,21 +1106,33 @@ func (fs *owncloudsqlfs) UnsetArbitraryMetadata(ctx context.Context, ref *provid
 
 // GetLock returns an existing lock on the given reference.
 func (fs *owncloudsqlfs) GetLock(ctx context.Context, ref *provider.Reference) (*provider.Lock, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("unimplemented")
 }
 
 // SetLock puts a lock on the given reference.
 func (fs *owncloudsqlfs) SetLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (fs *owncloudsqlfs) RefreshLock(ctx context.Context, ref *provider.Reference, lock *provider.Lock, existingLockID string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
 // Unlock removes an existing lock from the given reference.
 func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lock *provider.Lock) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	return errtypes.NotSupported("unimplemented")
 }
 
@@ -1050,6 +1146,9 @@ func (fs *owncloudsqlfs) Unlock(ctx context.Context, ref *provider.Reference, lo
 // We will live with that compromise since this storage driver will be
 // deprecated soon.
 func (fs *owncloudsqlfs) Delete(ctx context.Context, ref *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
+	defer span.End()
+
 	var ip string
 	if ip, err = fs.resolve(ctx, ref); err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -1096,6 +1195,9 @@ func (fs *owncloudsqlfs) Delete(ctx context.Context, ref *provider.Reference) (e
 }
 
 func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "trash")
+	defer span.End()
+
 	// move to trash location
 	dtime := time.Now().Unix()
 	tgt := filepath.Join(rp, fmt.Sprintf("%s.d%d", filepath.Base(ip), dtime))
@@ -1139,6 +1241,9 @@ func (fs *owncloudsqlfs) trash(ctx context.Context, ip string, rp string, origin
 }
 
 func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, origin string, dtime int64) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "trashVersions")
+	defer span.End()
+
 	vp := fs.getVersionsPath(ctx, ip)
 	vrp, err := fs.getVersionRecyclePath(ctx)
 	if err != nil {
@@ -1179,6 +1284,9 @@ func (fs *owncloudsqlfs) trashVersions(ctx context.Context, ip string, origin st
 }
 
 func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Reference) (err error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
+	defer span.End()
+
 	var oldIP string
 	if oldIP, err = fs.resolve(ctx, oldRef); err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -1226,6 +1334,9 @@ func (fs *owncloudsqlfs) Move(ctx context.Context, oldRef, newRef *provider.Refe
 }
 
 func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMD")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		// TODO return correct errtype
@@ -1270,6 +1381,9 @@ func (fs *owncloudsqlfs) GetMD(ctx context.Context, ref *provider.Reference, mdK
 }
 
 func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFolder")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	ip, err := fs.resolve(ctx, ref)
@@ -1292,6 +1406,9 @@ func (fs *owncloudsqlfs) ListFolder(ctx context.Context, ref *provider.Reference
 }
 
 func (fs *owncloudsqlfs) listWithNominalHome(ctx context.Context, ip string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithNominalHome")
+	defer span.End()
+
 	// If a user wants to list a folder shared with him the path will already
 	// be wrapped with the files directory path of the share owner.
 	// In that case we don't want to wrap the path again.
@@ -1336,6 +1453,9 @@ func (fs *owncloudsqlfs) listWithNominalHome(ctx context.Context, ip string, mdK
 }
 
 func (fs *owncloudsqlfs) listWithHome(ctx context.Context, home, p string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listWithHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if p == home {
 		log.Debug().Msg("listing home")
@@ -1347,6 +1467,9 @@ func (fs *owncloudsqlfs) listWithHome(ctx context.Context, home, p string, mdKey
 }
 
 func (fs *owncloudsqlfs) listHome(ctx context.Context, home string, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listHome")
+	defer span.End()
+
 	// list files
 	ip := fs.toInternalPath(ctx, home)
 
@@ -1384,6 +1507,9 @@ func (fs *owncloudsqlfs) listHome(ctx context.Context, home string, mdKeys []str
 }
 
 func (fs *owncloudsqlfs) archiveRevision(ctx context.Context, vbp string, ip string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "archiveRevision")
+	defer span.End()
+
 	// move existing file to versions dir
 	vp := fmt.Sprintf("%s.v%d", vbp, time.Now().Unix())
 	if err := os.MkdirAll(filepath.Dir(vp), 0700); err != nil {
@@ -1432,6 +1558,9 @@ func (fs *owncloudsqlfs) archiveRevision(ctx context.Context, vbp string, ip str
 }
 
 func (fs *owncloudsqlfs) Download(ctx context.Context, ref *provider.Reference) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Download")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -1460,6 +1589,9 @@ func (fs *owncloudsqlfs) Download(ctx context.Context, ref *provider.Reference) 
 }
 
 func (fs *owncloudsqlfs) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRevisions")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return nil, errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -1511,10 +1643,16 @@ func (fs *owncloudsqlfs) ListRevisions(ctx context.Context, ref *provider.Refere
 }
 
 func (fs *owncloudsqlfs) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DownloadRevision")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("download revision")
 }
 
 func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRevision")
+	defer span.End()
+
 	ip, err := fs.resolve(ctx, ref)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving reference")
@@ -1600,6 +1738,9 @@ func (fs *owncloudsqlfs) RestoreRevision(ctx context.Context, ref *provider.Refe
 }
 
 func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, relativePath string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycleItem")
+	defer span.End()
+
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
 		return errors.Wrap(err, "owncloudsql: error resolving recycle path")
@@ -1660,6 +1801,9 @@ func (fs *owncloudsqlfs) PurgeRecycleItem(ctx context.Context, basePath, key, re
 }
 
 func (fs *owncloudsqlfs) EmptyRecycle(ctx context.Context) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "EmptyRecycle")
+	defer span.End()
+
 	// TODO check permission? on what? user must be the owner
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1699,6 +1843,9 @@ func splitTrashKey(key string) (string, int, error) {
 }
 
 func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInfo) *provider.RecycleItem {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "convertToRecycleItem")
+	defer span.End()
+
 	base, ttime, err := splitTrashKey(md.Name())
 	if err != nil {
 		log := appctx.GetLogger(ctx)
@@ -1732,6 +1879,9 @@ func (fs *owncloudsqlfs) convertToRecycleItem(ctx context.Context, md os.FileInf
 }
 
 func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativePath string) ([]*provider.RecycleItem, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	// TODO check permission? on what? user must be the owner?
 	rp, err := fs.getRecyclePath(ctx)
 	if err != nil {
@@ -1769,6 +1919,9 @@ func (fs *owncloudsqlfs) ListRecycle(ctx context.Context, basePath, key, relativ
 }
 
 func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, relativePath string, restoreRef *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	base, ttime, err := splitTrashKey(key)
@@ -1822,6 +1975,9 @@ func (fs *owncloudsqlfs) RestoreRecycleItem(ctx context.Context, basePath, key, 
 }
 
 func (fs *owncloudsqlfs) RestoreRecycleItemVersions(ctx context.Context, key, target string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItemVersions")
+	defer span.End()
+
 	base, ttime, err := splitTrashKey(key)
 	if err != nil {
 		return fmt.Errorf("invalid trash item suffix")
@@ -1861,6 +2017,9 @@ func (fs *owncloudsqlfs) RestoreRecycleItemVersions(ctx context.Context, key, ta
 }
 
 func (fs *owncloudsqlfs) propagate(ctx context.Context, leafPath string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "propagate")
+	defer span.End()
+
 	var root string
 	if fs.c.EnableHome {
 		root = filepath.Clean(fs.toInternalPath(ctx, "/"))
@@ -1956,16 +2115,25 @@ func (fs *owncloudsqlfs) HashFile(path string) (string, string, string, error) {
 }
 
 func (fs *owncloudsqlfs) ListStorageSpaces(ctx context.Context, filter []*provider.ListStorageSpacesRequest_Filter) ([]*provider.StorageSpace, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	// TODO(corby): Implement
 	return nil, errtypes.NotSupported("list storage spaces")
 }
 
 // UpdateStorageSpace updates a storage space.
 func (fs *owncloudsqlfs) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	return nil, errtypes.NotSupported("update storage space")
 }
 
 func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readChecksumIntoResourceChecksum")
+	defer span.End()
+
 	re := regexp.MustCompile(strings.ToUpper(algo) + `:(.*)`)
 	matches := re.FindStringSubmatch(checksums)
 	if len(matches) < 2 {
@@ -1983,6 +2151,9 @@ func readChecksumIntoResourceChecksum(ctx context.Context, checksums, algo strin
 }
 
 func readChecksumIntoOpaque(ctx context.Context, checksums, algo string, ri *provider.ResourceInfo) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readChecksumIntoOpaque")
+	defer span.End()
+
 	re := regexp.MustCompile(strings.ToUpper(algo) + `:(.*)`)
 	matches := re.FindStringSubmatch(checksums)
 	if len(matches) < 2 {

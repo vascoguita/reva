@@ -31,9 +31,12 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 )
+
+const tracerName = "providerauthorizer"
 
 type config struct {
 	Driver  string                            `mapstructure:"driver"`
@@ -73,6 +76,9 @@ func New(m map[string]interface{}, unprotected []string, ocmPrefix string) (glob
 
 	handler := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r, span := tracing.SpanStartFromRequest(r, tracerName, "providerauthorizer Interceptor HTTP Handler")
+			defer span.End()
+
 			ctx := r.Context()
 			log := appctx.GetLogger(ctx)
 			head, _ := router.ShiftPath(r.URL.Path)

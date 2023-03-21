@@ -28,7 +28,6 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
-	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,8 +35,7 @@ import (
 // NewOK returns a Status with CODE_OK.
 func NewOK(ctx context.Context) *rpc.Status {
 	return &rpc.Status{
-		Code:  rpc.Code_CODE_OK,
-		Trace: getTrace(ctx),
+		Code: rpc.Code_CODE_OK,
 	}
 }
 
@@ -48,7 +46,6 @@ func NewNotFound(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_NOT_FOUND,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -59,7 +56,6 @@ func NewInvalid(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -76,7 +72,6 @@ func NewInternal(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INTERNAL,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -87,7 +82,6 @@ func NewUnauthenticated(ctx context.Context, err error, msg string) *rpc.Status 
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNAUTHENTICATED,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -99,7 +93,6 @@ func NewPermissionDenied(ctx context.Context, err error, msg string) *rpc.Status
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_PERMISSION_DENIED,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -111,7 +104,6 @@ func NewInsufficientStorage(ctx context.Context, err error, msg string) *rpc.Sta
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_INSUFFICIENT_STORAGE,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -122,7 +114,6 @@ func NewUnimplemented(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_UNIMPLEMENTED,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -133,7 +124,6 @@ func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ALREADY_EXISTS,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -141,7 +131,6 @@ func NewAlreadyExists(ctx context.Context, err error, msg string) *rpc.Status {
 func NewInvalidArg(ctx context.Context, msg string) *rpc.Status {
 	return &rpc.Status{Code: rpc.Code_CODE_INVALID_ARGUMENT,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -150,7 +139,6 @@ func NewConflict(ctx context.Context, err error, msg string) *rpc.Status {
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_ABORTED,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -161,7 +149,6 @@ func NewFailedPrecondition(ctx context.Context, err error, msg string) *rpc.Stat
 	return &rpc.Status{
 		Code:    rpc.Code_CODE_FAILED_PRECONDITION,
 		Message: msg,
-		Trace:   getTrace(ctx),
 	}
 }
 
@@ -210,10 +197,4 @@ func NewStatusFromErrType(ctx context.Context, msg string, err error) *rpc.Statu
 // NewErrorFromCode returns a standardized Error for a given RPC code.
 func NewErrorFromCode(code rpc.Code, pkgname string) error {
 	return errors.New(pkgname + ": grpc failed with code " + code.String())
-}
-
-// internal function to attach the trace to a context.
-func getTrace(ctx context.Context) string {
-	span := trace.SpanFromContext(ctx)
-	return span.SpanContext().TraceID().String()
 }

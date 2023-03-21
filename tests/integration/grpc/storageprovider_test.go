@@ -31,6 +31,7 @@ import (
 	"github.com/cs3org/reva/pkg/storage/fs/ocis"
 	"github.com/cs3org/reva/pkg/storage/fs/owncloud"
 	jwt "github.com/cs3org/reva/pkg/token/manager/jwt"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/tests/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -75,6 +76,8 @@ var _ = Describe("storage providers", func() {
 	JustBeforeEach(func() {
 		var err error
 		ctx = context.Background()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "JustBeforeEach")
+		defer span.End()
 
 		// Add auth token
 		tokenManager, err := jwt.New(map[string]interface{}{"secret": "changemeplease"})
@@ -89,7 +92,7 @@ var _ = Describe("storage providers", func() {
 
 		revads, err = startRevads(dependencies, nil, nil, variables)
 		Expect(err).ToNot(HaveOccurred())
-		serviceClient, err = pool.GetStorageProviderServiceClient(pool.Endpoint(revads["storage"].GrpcAddress))
+		serviceClient, err = pool.GetStorageProviderServiceClient(ctx, pool.Endpoint(revads["storage"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 	})
 

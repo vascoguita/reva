@@ -29,7 +29,6 @@ import (
 	"go.opencensus.io/plugin/ochttp"
 )
 
-// GetHTTPClient returns an http client with open census tracing support.
 // TODO(labkode): harden it.
 // https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 func GetHTTPClient(opts ...Option) *http.Client {

@@ -36,11 +36,14 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 
 	// Provides mysql drivers.
+	"github.com/cs3org/reva/pkg/tracing"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const tracerName = "owncloudsql"
 
 func init() {
 	registry.Register("owncloudsql", NewMysql)
@@ -109,6 +112,9 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 func (m *manager) Authenticate(ctx context.Context, login, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	// 1. find user by login

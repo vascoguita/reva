@@ -31,10 +31,13 @@ import (
 	"github.com/cs3org/reva/pkg/publicshare/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "publicshareprovider"
 
 func init() {
 	rgrpc.Register("publicshareprovider", New)
@@ -53,6 +56,7 @@ func (c *config) init() {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf                  *config
 	sm                    publicshare.Manager
 	allowedPathsForShares []*regexp.Regexp
@@ -131,6 +135,9 @@ func (s *service) isPathAllowed(path string) bool {
 }
 
 func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicShareRequest) (*link.CreatePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreatePublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "create").Msg("create public share")
 
@@ -168,6 +175,9 @@ func (s *service) CreatePublicShare(ctx context.Context, req *link.CreatePublicS
 }
 
 func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicShareRequest) (*link.RemovePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemovePublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "remove").Msg("remove public share")
 
@@ -190,6 +200,9 @@ func (s *service) RemovePublicShare(ctx context.Context, req *link.RemovePublicS
 }
 
 func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublicShareByTokenRequest) (*link.GetPublicShareByTokenResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShareByToken")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Debug().Msg("getting public share by token")
 
@@ -217,6 +230,9 @@ func (s *service) GetPublicShareByToken(ctx context.Context, req *link.GetPublic
 }
 
 func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRequest) (*link.GetPublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "get").Msg("get public share")
 
@@ -244,6 +260,9 @@ func (s *service) GetPublicShare(ctx context.Context, req *link.GetPublicShareRe
 }
 
 func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicSharesRequest) (*link.ListPublicSharesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListPublicShares")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "list").Msg("list public share")
 	user, _ := ctxpkg.ContextGetUser(ctx)
@@ -264,6 +283,9 @@ func (s *service) ListPublicShares(ctx context.Context, req *link.ListPublicShar
 }
 
 func (s *service) UpdatePublicShare(ctx context.Context, req *link.UpdatePublicShareRequest) (*link.UpdatePublicShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdatePublicShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	log.Info().Str("publicshareprovider", "update").Msg("update public share")
 

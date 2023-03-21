@@ -32,7 +32,10 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "user"
 
 // The Handler renders the user endpoint.
 type Handler struct {
@@ -56,6 +59,8 @@ const (
 
 // GetSelf handles GET requests on /cloud/user.
 func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetSelf")
+	defer span.End()
 	ctx := r.Context()
 
 	// TODO move user to handler parameter?
@@ -75,7 +80,7 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getLanguage(ctx context.Context) string {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		return ""
 	}
@@ -118,7 +123,7 @@ func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) updateLanguage(ctx context.Context, lang string) error {
-	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		return err
 	}

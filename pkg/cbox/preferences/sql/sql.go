@@ -27,8 +27,11 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/preferences"
 	"github.com/cs3org/reva/pkg/preferences/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 )
+
+const tracerName = "sql"
 
 func init() {
 	registry.Register("sql", New)
@@ -66,6 +69,9 @@ func New(m map[string]interface{}) (preferences.Manager, error) {
 }
 
 func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetKey")
+	defer span.End()
+
 	user, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return errtypes.UserRequired("preferences: error getting user from ctx")
@@ -84,6 +90,9 @@ func (m *mgr) SetKey(ctx context.Context, key, namespace, value string) error {
 }
 
 func (m *mgr) GetKey(ctx context.Context, key, namespace string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetKey")
+	defer span.End()
+
 	user, ok := ctxpkg.ContextGetUser(ctx)
 	if !ok {
 		return "", errtypes.UserRequired("preferences: error getting user from ctx")

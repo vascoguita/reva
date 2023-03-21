@@ -24,11 +24,15 @@ import (
 	ocmcore "github.com/cs3org/go-cs3apis/cs3/ocm/core/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
-	c, err := pool.GetOCMCoreClient(pool.Endpoint(s.c.OCMCoreEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateOCMCoreShare")
+	defer span.End()
+
+	c, err := pool.GetOCMCoreClient(ctx, pool.Endpoint(s.c.OCMCoreEndpoint))
 	if err != nil {
 		return &ocmcore.CreateOCMCoreShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting ocm core client"),

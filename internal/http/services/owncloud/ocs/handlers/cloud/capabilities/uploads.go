@@ -24,8 +24,11 @@ import (
 
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/data"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/juliangruber/go-intersect"
 )
+
+const tracerName = "capabilities"
 
 type chunkProtocol string
 
@@ -36,6 +39,9 @@ var (
 )
 
 func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent string) data.CapabilitiesData {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getCapabilitiesForUserAgent")
+	defer span.End()
+
 	// Creating a copy of the capabilities struct is less expensive than taking a lock
 	c := *h.c.Capabilities
 	if userAgent != "" {
@@ -58,6 +64,9 @@ func (h *Handler) getCapabilitiesForUserAgent(ctx context.Context, userAgent str
 }
 
 func ctxUserBelongsToGroups(ctx context.Context, groups []string) bool {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ctxUserBelongsToGroups")
+	defer span.End()
+
 	if user, ok := ctxpkg.ContextGetUser(ctx); ok {
 		return len(intersect.Simple(groups, user.Groups)) > 0
 	}

@@ -29,13 +29,17 @@ import (
 	"github.com/cs3org/reva/pkg/group/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "groupprovider"
+const tracerName = "groupprovider"
+
 func init() {
-	rgrpc.Register("groupprovider", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -85,6 +89,7 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	groupmgr group.Manager
 }
 
@@ -101,6 +106,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*grouppb.GetGroupResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGroup")
+	defer span.End()
+
 	group, err := s.groupmgr.GetGroup(ctx, req.GroupId, req.SkipFetchingMembers)
 	if err != nil {
 		res := &grouppb.GetGroupResponse{}
@@ -120,6 +128,9 @@ func (s *service) GetGroup(ctx context.Context, req *grouppb.GetGroupRequest) (*
 }
 
 func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByClaimRequest) (*grouppb.GetGroupByClaimResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetGroupByClaim")
+	defer span.End()
+
 	group, err := s.groupmgr.GetGroupByClaim(ctx, req.Claim, req.Value, req.SkipFetchingMembers)
 	if err != nil {
 		res := &grouppb.GetGroupByClaimResponse{}
@@ -139,6 +150,9 @@ func (s *service) GetGroupByClaim(ctx context.Context, req *grouppb.GetGroupByCl
 }
 
 func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest) (*grouppb.FindGroupsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindGroups")
+	defer span.End()
+
 	groups, err := s.groupmgr.FindGroups(ctx, req.Filter, req.SkipFetchingMembers)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error finding groups")
@@ -159,6 +173,9 @@ func (s *service) FindGroups(ctx context.Context, req *grouppb.FindGroupsRequest
 }
 
 func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest) (*grouppb.GetMembersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMembers")
+	defer span.End()
+
 	members, err := s.groupmgr.GetMembers(ctx, req.GroupId)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error getting group members")
@@ -174,6 +191,9 @@ func (s *service) GetMembers(ctx context.Context, req *grouppb.GetMembersRequest
 }
 
 func (s *service) HasMember(ctx context.Context, req *grouppb.HasMemberRequest) (*grouppb.HasMemberResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "HasMember")
+	defer span.End()
+
 	ok, err := s.groupmgr.HasMember(ctx, req.GroupId, req.UserId)
 	if err != nil {
 		err = errors.Wrap(err, "groupprovidersvc: error checking for group member")

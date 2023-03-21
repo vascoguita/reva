@@ -24,7 +24,10 @@ import (
 	"github.com/cs3org/reva/internal/http/interceptors/auth/token/registry"
 	"github.com/cs3org/reva/pkg/auth"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "header"
 
 func init() {
 	registry.Register("header", New)
@@ -40,5 +43,7 @@ func New(m map[string]interface{}) (auth.TokenStrategy, error) {
 }
 
 func (s *strategy) GetToken(r *http.Request) string {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetCredentials")
+	defer span.End()
 	return r.Header.Get(s.header)
 }

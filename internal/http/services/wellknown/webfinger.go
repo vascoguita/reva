@@ -20,8 +20,13 @@ package wellknown
 
 import (
 	"net/http"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (s *svc) doWebfinger(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doWebfinger")
+	defer span.End()
+
 	w.WriteHeader(http.StatusNotFound)
 }

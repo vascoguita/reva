@@ -30,8 +30,11 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 )
+
+const tracerName = "utils"
 
 // APITokenManager stores config related to api management.
 type APITokenManager struct {
@@ -72,6 +75,9 @@ func InitAPITokenManager(conf map[string]interface{}) (*APITokenManager, error) 
 }
 
 func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "renewAPIToken")
+	defer span.End()
+
 	// Received tokens have an expiration time of 20 minutes.
 	// Take a couple of seconds as buffer time for the API call to complete
 	if forceRenewal || a.oidcToken.tokenExpirationTime.Before(time.Now().Add(time.Second*time.Duration(2))) {
@@ -90,6 +96,9 @@ func (a *APITokenManager) renewAPIToken(ctx context.Context, forceRenewal bool) 
 }
 
 func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getAPIToken")
+	defer span.End()
+
 	params := url.Values{
 		"grant_type": {"client_credentials"},
 		"audience":   {a.conf.TargetAPI},
@@ -129,6 +138,9 @@ func (a *APITokenManager) getAPIToken(ctx context.Context) (string, time.Time, e
 
 // SendAPIGetRequest makes an API GET Request to the passed URL.
 func (a *APITokenManager) SendAPIGetRequest(ctx context.Context, url string, forceRenewal bool) (map[string]interface{}, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SendAPIGetRequest")
+	defer span.End()
+
 	err := a.renewAPIToken(ctx, forceRenewal)
 	if err != nil {
 		return nil, err

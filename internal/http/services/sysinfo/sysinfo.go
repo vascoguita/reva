@@ -24,10 +24,14 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sysinfo"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "sysinfo"
+const tracerName = "sysinfo"
 
 func init() {
 	global.Register(serviceName, New)
@@ -38,12 +42,9 @@ type config struct {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf *config
 }
-
-const (
-	serviceName = "sysinfo"
-)
 
 // Close is called when this service is being stopped.
 func (s *svc) Close() error {
@@ -63,6 +64,9 @@ func (s *svc) Unprotected() []string {
 // Handler serves all HTTP requests.
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Sysinfo Service HTTP Handler")
+		defer span.End()
+
 		log := appctx.GetLogger(r.Context())
 		if _, err := w.Write([]byte(s.getJSONData())); err != nil {
 			log.Err(err).Msg("error writing SysInfo response")

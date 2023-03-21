@@ -19,16 +19,21 @@
 package sciencemesh
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/smtpclient"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "sciencemesh"
+const tracerName = "sciencemesh"
 
 func init() {
 	global.Register("sciencemesh", New)
@@ -36,6 +41,9 @@ func init() {
 
 // New returns a new sciencemesh service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -49,7 +57,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		router: r,
 	}
 
-	if err := s.routerInit(); err != nil {
+	if err := s.routerInit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -82,22 +90,23 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf   *config
 	router chi.Router
 }
 
-func (s *svc) routerInit() error {
+func (s *svc) routerInit(ctx context.Context) error {
 	tokenHandler := new(tokenHandler)
-	if err := tokenHandler.init(s.conf); err != nil {
+	if err := tokenHandler.init(ctx, s.conf); err != nil {
 		return err
 	}
 	providersHandler := new(providersHandler)
-	if err := providersHandler.init(s.conf); err != nil {
+	if err := providersHandler.init(ctx, s.conf); err != nil {
 		return err
 	}
 
 	appsHandler := new(appsHandler)
-	if err := appsHandler.init(s.conf); err != nil {
+	if err := appsHandler.init(ctx, s.conf); err != nil {
 		return err
 	}
 

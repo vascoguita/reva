@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 type configData struct {
@@ -77,6 +78,9 @@ func (h *configHandler) init(c *config) {
 
 // Send sends the configuration to the caller.
 func (h *configHandler) Send(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "Send")
+	defer span.End()
+
 	log := appctx.GetLogger(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")

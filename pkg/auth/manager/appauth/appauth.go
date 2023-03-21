@@ -29,9 +29,12 @@ import (
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "appauth"
 
 func init() {
 	registry.Register("appauth", New)
@@ -60,7 +63,10 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, username, password string) (*user.User, map[string]*authpb.Scope, error) {
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
+	gtw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(m.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

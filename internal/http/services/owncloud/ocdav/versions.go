@@ -28,7 +28,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
 
@@ -45,8 +45,10 @@ func (h *VersionsHandler) init(c *Config) error {
 // a version is identified by a timestamp, eg. /remote.php/dav/meta/<fileid>/v/1561410426.
 func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Versions HTTP Handler")
+		defer span.End()
 
+		ctx := r.Context()
 		if rid == nil {
 			http.Error(w, "404 Not Found", http.StatusNotFound)
 			return
@@ -80,9 +82,10 @@ func (h *VersionsHandler) Handler(s *svc, rid *provider.ResourceId) http.Handler
 }
 
 func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "listVersions")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doListVersions")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Logger()
 
 	pf, status, err := readPropfind(r.Body)
@@ -92,7 +95,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -113,10 +116,10 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 				code:    SabredavNotFound,
 				message: "Resource not found",
 			})
-			HandleWebdavError(&sublog, w, b, err)
+			HandleWebdavError(ctx, &sublog, w, b, err)
 			return
 		}
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(ctx, &sublog, w, res.Status)
 		return
 	}
 
@@ -129,7 +132,7 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	if lvRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, lvRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, lvRes.Status)
 		return
 	}
 
@@ -181,12 +184,13 @@ func (h *VersionsHandler) doListVersions(w http.ResponseWriter, r *http.Request,
 }
 
 func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *svc, rid *provider.ResourceId, key string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "restore")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doRestore")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Interface("resourceid", rid).Str("key", key).Logger()
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -205,7 +209,7 @@ func (h *VersionsHandler) doRestore(w http.ResponseWriter, r *http.Request, s *s
 		return
 	}
 	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(ctx, &sublog, w, res.Status)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

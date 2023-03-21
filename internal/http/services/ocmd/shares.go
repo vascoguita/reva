@@ -26,7 +26,6 @@ import (
 	"net/http"
 	"strings"
 
-	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	providerpb "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 
@@ -38,6 +37,7 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/reqres"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/go-playground/validator/v10"
 )
@@ -45,18 +45,13 @@ import (
 var validate = validator.New()
 
 type sharesHandler struct {
-	gatewayClient              gateway.GatewayAPIClient
+	gatewayAddr                string
 	exposeRecipientDisplayName bool
 }
 
-func (h *sharesHandler) init(c *config) error {
-	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
-	if err != nil {
-		return err
-	}
+func (h *sharesHandler) init(c *config) {
+	h.gatewayAddr = c.GatewaySvc
 	h.exposeRecipientDisplayName = c.ExposeRecipientDisplayName
-	return nil
 }
 
 type createShareRequest struct {
@@ -77,6 +72,9 @@ type createShareRequest struct {
 // CreateShare sends all the informations to the consumer needed to start
 // synchronization between the two services.
 func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "CreateShare")
+	defer span.End()
+
 	ctx := r.Context()
 
 	req, err := getCreateShareRequest(r)
@@ -105,7 +103,13 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	providerAllowedResp, err := h.gatewayClient.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
+	if err != nil {
+		reqres.WriteError(w, r, reqres.APIErrorServerError, "error getting grpc gateway client", err)
+		return
+	}
+
+	providerAllowedResp, err := client.IsProviderAllowed(ctx, &ocmprovider.IsProviderAllowedRequest{
 		Provider: &providerInfo,
 	})
 	if err != nil {
@@ -123,7 +127,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRes, err := h.gatewayClient.GetUser(ctx, &userpb.GetUserRequest{
+	userRes, err := client.GetUser(ctx, &userpb.GetUserRequest{
 		UserId: &userpb.UserId{OpaqueId: shareWith}, SkipFetchingUserGroups: true,
 	})
 	if err != nil {
@@ -165,7 +169,7 @@ func (h *sharesHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	createShareResp, err := h.gatewayClient.CreateOCMCoreShare(ctx, createShareReq)
+	createShareResp, err := client.CreateOCMCoreShare(ctx, createShareReq)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError, "error creating ocm share", err)
 		return
@@ -210,6 +214,9 @@ func getIDAndMeshProvider(user string) (string, string, error) {
 }
 
 func getCreateShareRequest(r *http.Request) (*createShareRequest, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "getCreateShareRequest")
+	defer span.End()
+
 	var req createShareRequest
 	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err == nil && contentType == "application/json" {

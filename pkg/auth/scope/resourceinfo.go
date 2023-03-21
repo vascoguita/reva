@@ -30,11 +30,15 @@ import (
 	registry "github.com/cs3org/go-cs3apis/cs3/storage/registry/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
-func resourceinfoScope(_ context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+func resourceinfoScope(ctx context.Context, scope *authpb.Scope, resource interface{}, logger *zerolog.Logger) (bool, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "resourceinfoScope")
+	defer span.End()
+
 	var r provider.ResourceInfo
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &r)
 	if err != nil {

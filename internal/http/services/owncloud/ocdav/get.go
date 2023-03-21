@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,26 +33,31 @@ import (
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rhttp"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathGet(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "get")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathGet")
 	defer span.End()
 
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Str("svc", "ocdav").Str("handler", "get").Logger()
 
 	ref := &provider.Reference{Path: fn}
-	s.handleGet(ctx, w, r, ref, "simple", sublog)
+	s.handleGet(w, r, ref, "simple", sublog)
 }
 
-func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
-	client, err := s.getClient()
+func (s *svc) handleGet(w http.ResponseWriter, r *http.Request, ref *provider.Reference, dlProtocol string, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleGet")
+	defer span.End()
+
+	ctx := r.Context()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -68,7 +72,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	case sRes.Status.Code != rpc.Code_CODE_OK:
-		HandleErrorStatus(&log, w, sRes.Status)
+		HandleErrorStatus(ctx, &log, w, sRes.Status)
 		return
 	case sRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER:
 		log.Warn().Msg("resource is a folder and cannot be downloaded")
@@ -83,7 +87,7 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if dRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, dRes.Status)
+		HandleErrorStatus(ctx, &log, w, dRes.Status)
 		return
 	}
 
@@ -160,9 +164,10 @@ func (s *svc) handleGet(ctx context.Context, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_get")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesGet")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Str("handler", "get").Logger()
 
 	// retrieve a specific storage space
@@ -174,8 +179,8 @@ func (s *svc) handleSpacesGet(w http.ResponseWriter, r *http.Request, spaceID st
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
-	s.handleGet(ctx, w, r, ref, "spaces", sublog)
+	s.handleGet(w, r, ref, "spaces", sublog)
 }

@@ -30,9 +30,12 @@ import (
 	"github.com/cs3org/reva/pkg/siteacc/manager"
 	accpanel "github.com/cs3org/reva/pkg/siteacc/panels/account"
 	"github.com/cs3org/reva/pkg/siteacc/panels/admin"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const tracerName = "siteacc"
 
 // SiteAccounts represents the main Site Accounts service object.
 type SiteAccounts struct {
@@ -126,6 +129,9 @@ func (siteacc *SiteAccounts) initialize(conf *config.Configuration, log *zerolog
 // RequestHandler returns the HTTP request handler of the service.
 func (siteacc *SiteAccounts) RequestHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Siteacc Service HTTP Handler")
+		defer span.End()
+
 		defer r.Body.Close()
 
 		// Get the active session for the request (or create a new one); a valid session object will always be returned

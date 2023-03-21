@@ -24,11 +24,15 @@ import (
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/rs/zerolog"
 )
 
-func userScope(_ context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
+func userScope(ctx context.Context, scope *authpb.Scope, resource interface{}, _ *zerolog.Logger) (bool, error) {
+	_, span := tracing.SpanStartFromContext(ctx, tracerName, "userScope")
+	defer span.End()
+
 	// Always return true. Registered users can access all paths.
 	// TODO(ishank011): Add checks for read/write permissions.
 	return true, nil

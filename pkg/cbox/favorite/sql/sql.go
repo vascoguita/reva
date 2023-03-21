@@ -29,8 +29,11 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 )
+
+const tracerName = "cbox"
 
 func init() {
 	registry.Register("sql", New)
@@ -68,6 +71,9 @@ func New(m map[string]interface{}) (favorite.Manager, error) {
 }
 
 func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provider.ResourceId, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFavorites")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	infos := []*provider.ResourceId{}
 	query := `SELECT fileid_prefix, fileid FROM cbox_metadata WHERE uid=? AND tag_key="fav"`
@@ -92,6 +98,9 @@ func (m *mgr) ListFavorites(ctx context.Context, userID *user.UserId) ([]*provid
 }
 
 func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetFavorite")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 
 	// The primary key is just the ID in the table, it should ideally be (uid, fileid_prefix, fileid, tag_key)
@@ -117,6 +126,9 @@ func (m *mgr) SetFavorite(ctx context.Context, userID *user.UserId, resourceInfo
 }
 
 func (m *mgr) UnsetFavorite(ctx context.Context, userID *user.UserId, resourceInfo *provider.ResourceInfo) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetFavorite")
+	defer span.End()
+
 	user := ctxpkg.ContextMustGetUser(ctx)
 	stmt, err := m.db.Prepare(`DELETE FROM cbox_metadata WHERE uid=? AND fileid_prefix=? AND fileid=? AND tag_key="fav"`)
 	if err != nil {

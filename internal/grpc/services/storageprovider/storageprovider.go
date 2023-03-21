@@ -40,17 +40,19 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
-	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "storageprovider"
+const tracerName = "storageprovider"
+
 func init() {
-	rgrpc.Register("storageprovider", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -99,6 +101,7 @@ func (c *config) init() {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf               *config
 	storage            storage.FS
 	mountPath, mountID string
@@ -218,6 +221,9 @@ func New(m map[string]interface{}, ss *grpc.Server) (rgrpc.Service, error) {
 }
 
 func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArbitraryMetadataRequest) (*provider.SetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetArbitraryMetadata")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -248,6 +254,9 @@ func (s *service) SetArbitraryMetadata(ctx context.Context, req *provider.SetArb
 }
 
 func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.UnsetArbitraryMetadataRequest) (*provider.UnsetArbitraryMetadataResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UnsetArbitraryMetadata")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -279,6 +288,9 @@ func (s *service) UnsetArbitraryMetadata(ctx context.Context, req *provider.Unse
 
 // SetLock puts a lock on the given reference.
 func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*provider.SetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "SetLock")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -312,6 +324,9 @@ func (s *service) SetLock(ctx context.Context, req *provider.SetLockRequest) (*p
 
 // GetLock returns an existing lock on the given reference.
 func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*provider.GetLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetLock")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -345,6 +360,9 @@ func (s *service) GetLock(ctx context.Context, req *provider.GetLockRequest) (*p
 
 // RefreshLock refreshes an existing lock on the given reference.
 func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequest) (*provider.RefreshLockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RefreshLock")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -378,6 +396,9 @@ func (s *service) RefreshLock(ctx context.Context, req *provider.RefreshLockRequ
 
 // Unlock removes an existing lock from the given reference.
 func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*provider.UnlockResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Unlock")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		err := errors.Wrap(err, "storageprovidersvc: error unwrapping path")
@@ -410,6 +431,9 @@ func (s *service) Unlock(ctx context.Context, req *provider.UnlockRequest) (*pro
 }
 
 func (s *service) InitiateFileDownload(ctx context.Context, req *provider.InitiateFileDownloadRequest) (*provider.InitiateFileDownloadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileDownload")
+	defer span.End()
+
 	// TODO(labkode): maybe add some checks before download starts? eg. check permissions?
 	// TODO(labkode): maybe add short-lived token?
 	// We now simply point the client to the data server.
@@ -446,6 +470,9 @@ func (s *service) InitiateFileDownload(ctx context.Context, req *provider.Initia
 }
 
 func (s *service) InitiateFileUpload(ctx context.Context, req *provider.InitiateFileUploadRequest) (*provider.InitiateFileUploadResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InitiateFileUpload")
+	defer span.End()
+
 	// TODO(labkode): same considerations as download
 	log := appctx.GetLogger(ctx)
 	newRef, err := s.unwrap(ctx, req.Ref)
@@ -536,6 +563,9 @@ func (s *service) InitiateFileUpload(ctx context.Context, req *provider.Initiate
 }
 
 func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*provider.GetPathResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetPath")
+	defer span.End()
+
 	// TODO(labkode): check that the storage ID is the same as the storage provider id.
 	fn, err := s.storage.GetPathByID(ctx, req.ResourceId)
 	if err != nil {
@@ -553,6 +583,9 @@ func (s *service) GetPath(ctx context.Context, req *provider.GetPathRequest) (*p
 }
 
 func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*provider.GetHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	home := path.Join(s.mountPath)
 
 	res := &provider.GetHomeResponse{
@@ -564,6 +597,9 @@ func (s *service) GetHome(ctx context.Context, req *provider.GetHomeRequest) (*p
 }
 
 func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeRequest) (*provider.CreateHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	if err := s.storage.CreateHome(ctx); err != nil {
 		st := status.NewInternal(ctx, err, "error creating home")
@@ -581,6 +617,9 @@ func (s *service) CreateHome(ctx context.Context, req *provider.CreateHomeReques
 
 // CreateStorageSpace creates a storage space.
 func (s *service) CreateStorageSpace(ctx context.Context, req *provider.CreateStorageSpaceRequest) (*provider.CreateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateStorageSpace")
+	defer span.End()
+
 	resp, err := s.storage.CreateStorageSpace(ctx, req)
 	if err != nil {
 		return nil, err
@@ -596,6 +635,9 @@ func hasNodeID(s *provider.StorageSpace) bool {
 }
 
 func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStorageSpacesRequest) (*provider.ListStorageSpacesResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageSpaces")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	spaces, err := s.storage.ListStorageSpaces(ctx, req.Filters)
@@ -638,16 +680,25 @@ func (s *service) ListStorageSpaces(ctx context.Context, req *provider.ListStora
 }
 
 func (s *service) UpdateStorageSpace(ctx context.Context, req *provider.UpdateStorageSpaceRequest) (*provider.UpdateStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateStorageSpace")
+	defer span.End()
+
 	return s.storage.UpdateStorageSpace(ctx, req)
 }
 
 func (s *service) DeleteStorageSpace(ctx context.Context, req *provider.DeleteStorageSpaceRequest) (*provider.DeleteStorageSpaceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DeleteStorageSpace")
+	defer span.End()
+
 	return &provider.DeleteStorageSpaceResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("DeleteStorageSpace not implemented"), "DeleteStorageSpace not implemented"),
 	}, nil
 }
 
 func (s *service) CreateContainer(ctx context.Context, req *provider.CreateContainerRequest) (*provider.CreateContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateContainer")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.CreateContainerResponse{
@@ -678,6 +729,9 @@ func (s *service) CreateContainer(ctx context.Context, req *provider.CreateConta
 }
 
 func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest) (*provider.TouchFileResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "TouchFile")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.TouchFileResponse{
@@ -708,6 +762,9 @@ func (s *service) TouchFile(ctx context.Context, req *provider.TouchFileRequest)
 }
 
 func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*provider.DeleteResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Delete")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DeleteResponse{
@@ -751,6 +808,9 @@ func (s *service) Delete(ctx context.Context, req *provider.DeleteRequest) (*pro
 }
 
 func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provider.MoveResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Move")
+	defer span.End()
+
 	sourceRef, err := s.unwrap(ctx, req.Source)
 	if err != nil {
 		return &provider.MoveResponse{
@@ -786,13 +846,8 @@ func (s *service) Move(ctx context.Context, req *provider.MoveRequest) (*provide
 }
 
 func (s *service) Stat(ctx context.Context, req *provider.StatRequest) (*provider.StatResponse, error) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "stat")
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Stat")
 	defer span.End()
-
-	span.SetAttributes(attribute.KeyValue{
-		Key:   "reference",
-		Value: attribute.StringValue(req.Ref.String()),
-	})
 
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -849,6 +904,9 @@ func (s *service) fixPermissions(md *provider.ResourceInfo) {
 }
 
 func (s *service) statVirtualView(ctx context.Context, ref *provider.Reference) (*provider.StatResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "statVirtualView")
+	defer span.End()
+
 	// The reference in the request encompasses this provider
 	// So we need to stat root, and update the required path
 	md, err := s.storage.GetMD(ctx, &provider.Reference{Path: "/"}, []string{})
@@ -884,6 +942,10 @@ func (s *service) statVirtualView(ctx context.Context, ref *provider.Reference) 
 
 func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, ss provider.ProviderAPI_ListContainerStreamServer) error {
 	ctx := ss.Context()
+
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListContainerStream")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	newRef, err := s.unwrap(ctx, req.Ref)
@@ -945,6 +1007,9 @@ func (s *service) ListContainerStream(req *provider.ListContainerStreamRequest, 
 }
 
 func (s *service) ListContainer(ctx context.Context, req *provider.ListContainerRequest) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListContainer")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		// The path might be a virtual view; handle that case
@@ -992,6 +1057,9 @@ func (s *service) ListContainer(ctx context.Context, req *provider.ListContainer
 }
 
 func (s *service) listVirtualView(ctx context.Context, ref *provider.Reference) (*provider.ListContainerResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "listVirtualView")
+	defer span.End()
+
 	// The reference in the request encompasses this provider
 	// So we need to list root, merge the responses and return only the immediate children
 	mds, err := s.storage.ListFolder(ctx, &provider.Reference{Path: "/"}, []string{})
@@ -1067,6 +1135,9 @@ func (s *service) listVirtualView(ctx context.Context, ref *provider.Reference) 
 }
 
 func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVersionsRequest) (*provider.ListFileVersionsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFileVersions")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListFileVersionsResponse{
@@ -1100,6 +1171,9 @@ func (s *service) ListFileVersions(ctx context.Context, req *provider.ListFileVe
 }
 
 func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreFileVersionRequest) (*provider.RestoreFileVersionResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreFileVersion")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.RestoreFileVersionResponse{
@@ -1130,6 +1204,9 @@ func (s *service) RestoreFileVersion(ctx context.Context, req *provider.RestoreF
 
 func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss provider.ProviderAPI_ListRecycleStreamServer) error {
 	ctx := ss.Context()
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycleStream")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	ref, err := s.unwrap(ctx, req.Ref)
@@ -1174,6 +1251,9 @@ func (s *service) ListRecycleStream(req *provider.ListRecycleStreamRequest, ss p
 }
 
 func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequest) (*provider.ListRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRecycle")
+	defer span.End()
+
 	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
@@ -1213,6 +1293,9 @@ func (s *service) ListRecycle(ctx context.Context, req *provider.ListRecycleRequ
 }
 
 func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreRecycleItemRequest) (*provider.RestoreRecycleItemResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRecycleItem")
+	defer span.End()
+
 	// TODO(labkode): CRITICAL: fill recycle info with storage provider.
 	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
@@ -1241,6 +1324,9 @@ func (s *service) RestoreRecycleItem(ctx context.Context, req *provider.RestoreR
 }
 
 func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRequest) (*provider.PurgeRecycleResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "PurgeRecycle")
+	defer span.End()
+
 	ref, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return nil, err
@@ -1285,6 +1371,9 @@ func (s *service) PurgeRecycle(ctx context.Context, req *provider.PurgeRecycleRe
 }
 
 func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsRequest) (*provider.ListGrantsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListGrants")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.ListGrantsResponse{
@@ -1316,6 +1405,9 @@ func (s *service) ListGrants(ctx context.Context, req *provider.ListGrantsReques
 }
 
 func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest) (*provider.DenyGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.DenyGrantResponse{
@@ -1353,6 +1445,9 @@ func (s *service) DenyGrant(ctx context.Context, req *provider.DenyGrantRequest)
 }
 
 func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (*provider.AddGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "AddGrant")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.AddGrantResponse{
@@ -1390,6 +1485,9 @@ func (s *service) AddGrant(ctx context.Context, req *provider.AddGrantRequest) (
 }
 
 func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequest) (*provider.UpdateGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateGrant")
+	defer span.End()
+
 	// check grantee type is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.UpdateGrantResponse{
@@ -1426,6 +1524,9 @@ func (s *service) UpdateGrant(ctx context.Context, req *provider.UpdateGrantRequ
 }
 
 func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequest) (*provider.RemoveGrantResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveGrant")
+	defer span.End()
+
 	// check targetType is valid
 	if req.Grant.Grantee.Type == provider.GranteeType_GRANTEE_TYPE_INVALID {
 		return &provider.RemoveGrantResponse{
@@ -1462,6 +1563,9 @@ func (s *service) RemoveGrant(ctx context.Context, req *provider.RemoveGrantRequ
 }
 
 func (s *service) CreateReference(ctx context.Context, req *provider.CreateReferenceRequest) (*provider.CreateReferenceResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateReference")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	// parse uri is valid
@@ -1502,12 +1606,18 @@ func (s *service) CreateReference(ctx context.Context, req *provider.CreateRefer
 }
 
 func (s *service) CreateSymlink(ctx context.Context, req *provider.CreateSymlinkRequest) (*provider.CreateSymlinkResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateSymlink")
+	defer span.End()
+
 	return &provider.CreateSymlinkResponse{
 		Status: status.NewUnimplemented(ctx, errtypes.NotSupported("CreateSymlink not implemented"), "CreateSymlink not implemented"),
 	}, nil
 }
 
 func (s *service) GetQuota(ctx context.Context, req *provider.GetQuotaRequest) (*provider.GetQuotaResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetQuota")
+	defer span.End()
+
 	newRef, err := s.unwrap(ctx, req.Ref)
 	if err != nil {
 		return &provider.GetQuotaResponse{
@@ -1546,6 +1656,9 @@ func getFS(c *config) (storage.FS, error) {
 }
 
 func (s *service) unwrap(ctx context.Context, ref *provider.Reference) (*provider.Reference, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "unwrap")
+	defer span.End()
+
 	// all references with an id can be passed on to the driver
 	// there are two cases:
 	// 1. absolute id references (resource_id is set, path is empty)
@@ -1575,6 +1688,9 @@ func (s *service) trimMountPrefix(fn string) (string, error) {
 }
 
 func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMountpoint bool) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "wrap")
+	defer span.End()
+
 	if ri.Id.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ri.Id.StorageId = s.mountID
@@ -1590,6 +1706,9 @@ func (s *service) wrap(ctx context.Context, ri *provider.ResourceInfo, prefixMou
 }
 
 func (s *service) wrapReference(ctx context.Context, ref *provider.Reference, prefixMountpoint bool) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "wrapReference")
+	defer span.End()
+
 	if ref.ResourceId != nil && ref.ResourceId.StorageId == "" {
 		// For wrapper drivers, the storage ID might already be set. In that case, skip setting it
 		ref.ResourceId.StorageId = s.mountID

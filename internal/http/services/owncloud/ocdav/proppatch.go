@@ -31,15 +31,16 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "proppatch")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathProppatch")
 	defer span.End()
 
+	ctx := r.Context()
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
@@ -53,11 +54,11 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(&sublog, w, b, err)
+		HandleWebdavError(ctx, &sublog, w, b, err)
 		return
 	}
 
-	c, err := s.getClient()
+	c, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -82,13 +83,13 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 				code:    SabredavNotFound,
 				message: m,
 			})
-			HandleWebdavError(&sublog, w, b, err)
+			HandleWebdavError(ctx, &sublog, w, b, err)
 		}
-		HandleErrorStatus(&sublog, w, statRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, statRes.Status)
 		return
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(w, r, ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so we can just return
 		return
@@ -100,13 +101,14 @@ func (s *svc) handlePathProppatch(w http.ResponseWriter, r *http.Request, ns str
 		nRef += "/"
 	}
 
-	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	s.handleProppatchResponse(w, r, acceptedProps, removedProps, nRef, sublog)
 }
 
 func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("ocdav").Start(r.Context(), "spaces_proppatch")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesProppatch")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", r.URL.Path).Str("spaceid", spaceID).Logger()
 
 	pp, status, err := readProppatch(r.Body)
@@ -125,11 +127,11 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
 
-	c, err := s.getClient()
+	c, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -147,11 +149,11 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 	}
 
 	if statRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, statRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, statRes.Status)
 		return
 	}
 
-	acceptedProps, removedProps, ok := s.handleProppatch(ctx, w, r, ref, pp, sublog)
+	acceptedProps, removedProps, ok := s.handleProppatch(w, r, ref, pp, sublog)
 	if !ok {
 		// handleProppatch handles responses in error cases so we can just return
 		return
@@ -163,11 +165,15 @@ func (s *svc) handleSpacesProppatch(w http.ResponseWriter, r *http.Request, spac
 		nRef += "/"
 	}
 
-	s.handleProppatchResponse(ctx, w, r, acceptedProps, removedProps, nRef, sublog)
+	s.handleProppatchResponse(w, r, acceptedProps, removedProps, nRef, sublog)
 }
 
-func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
-	c, err := s.getClient()
+func (s *svc) handleProppatch(w http.ResponseWriter, r *http.Request, ref *provider.Reference, patches []Proppatch, log zerolog.Logger) ([]xml.Name, []xml.Name, bool) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleProppatch")
+	defer span.End()
+
+	ctx := r.Context()
+	c, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -227,10 +233,10 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							code:    SabredavPermissionDenied,
 							message: m,
 						})
-						HandleWebdavError(&log, w, b, err)
+						HandleWebdavError(ctx, &log, w, b, err)
 						return nil, nil, false
 					}
-					HandleErrorStatus(&log, w, res.Status)
+					HandleErrorStatus(ctx, &log, w, res.Status)
 					return nil, nil, false
 				}
 				if key == "http://owncloud.org/ns/favorite" {
@@ -264,10 +270,10 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 							code:    SabredavPermissionDenied,
 							message: m,
 						})
-						HandleWebdavError(&log, w, b, err)
+						HandleWebdavError(ctx, &log, w, b, err)
 						return nil, nil, false
 					}
-					HandleErrorStatus(&log, w, res.Status)
+					HandleErrorStatus(ctx, &log, w, res.Status)
 					return nil, nil, false
 				}
 
@@ -297,7 +303,11 @@ func (s *svc) handleProppatch(ctx context.Context, w http.ResponseWriter, r *htt
 	return acceptedProps, removedProps, true
 }
 
-func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, acceptedProps, removedProps []xml.Name, path string, log zerolog.Logger) {
+func (s *svc) handleProppatchResponse(w http.ResponseWriter, r *http.Request, acceptedProps, removedProps []xml.Name, path string, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleProppatchResponse")
+	defer span.End()
+
+	ctx := r.Context()
 	propRes, err := s.formatProppatchResponse(ctx, acceptedProps, removedProps, path)
 	if err != nil {
 		log.Error().Err(err).Msg("error formatting proppatch response")
@@ -313,9 +323,12 @@ func (s *svc) handleProppatchResponse(ctx context.Context, w http.ResponseWriter
 }
 
 func (s *svc) formatProppatchResponse(ctx context.Context, acceptedProps []xml.Name, removedProps []xml.Name, ref string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "formatProppatchResponse")
+	defer span.End()
+
 	responses := make([]responseXML, 0, 1)
 	response := responseXML{
-		Href:     encodePath(ref),
+		Href:     encodePath(ctx, ref),
 		Propstat: []propstatXML{},
 	}
 

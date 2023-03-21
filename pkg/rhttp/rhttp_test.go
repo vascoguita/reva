@@ -18,7 +18,11 @@
 
 package rhttp
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/cs3org/reva/pkg/rhttp/utils"
+)
 
 func TestURLHasPrefix(t *testing.T) {
 	tests := map[string]struct {
@@ -65,7 +69,7 @@ func TestURLHasPrefix(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			res := urlHasPrefix(test.url, test.prefix)
+			res := utils.UrlHasPrefix(test.url, test.prefix)
 			if res != test.expected {
 				t.Fatalf("%s got an unexpected result: %+v instead of %+v", t.Name(), res, test.expected)
 			}

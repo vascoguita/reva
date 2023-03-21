@@ -32,10 +32,13 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/share/repository/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "ocmcore"
 
 func init() {
 	rgrpc.Register("ocmcore", New)
@@ -47,6 +50,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf *config
 	repo share.Repository
 }
@@ -108,6 +112,9 @@ func (s *service) UnprotectedEndpoints() []string {
 
 // CreateOCMCoreShare is called when an OCM request comes into this reva instance from.
 func (s *service) CreateOCMCoreShare(ctx context.Context, req *ocmcore.CreateOCMCoreShareRequest) (*ocmcore.CreateOCMCoreShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateOCMCoreShare")
+	defer span.End()
+
 	if req.ShareType != ocm.ShareType_SHARE_TYPE_USER {
 		return nil, errtypes.NotSupported("share type not supported")
 	}

@@ -27,9 +27,12 @@ import (
 	"github.com/cs3org/reva/pkg/events"
 	"github.com/cs3org/reva/pkg/events/server"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/tracing"
 	"go-micro.dev/v4/util/log"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "eventsmiddleware"
 
 const (
 	defaultPriority = 200
@@ -40,9 +43,7 @@ func init() {
 }
 
 // NewUnary returns a new unary interceptor that emits events when needed
-// no lint because of the switch statement that should be extendable
-//
-
+// no lint because of the switch statement that should be extendable.
 func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	publisher, err := publisherFromConfig(m)
 	if err != nil {
@@ -50,6 +51,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "eventsmiddleware UnaryServerInterceptor")
+		defer span.End()
+
 		res, err := handler(ctx, req)
 		if err != nil {
 			return res, err
@@ -78,6 +82,9 @@ func NewUnary(m map[string]interface{}) (grpc.UnaryServerInterceptor, int, error
 // that creates the application context.
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "eventsmiddleware StreamServerInterceptor")
+		defer span.End()
 		// TODO: Use ss.RecvMsg() and ss.SendMsg() to send events from a stream
 		return handler(srv, ss)
 	}

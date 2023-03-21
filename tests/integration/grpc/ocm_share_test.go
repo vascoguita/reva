@@ -140,9 +140,9 @@ var _ = Describe("ocm share", func() {
 			"localhome_root":         Folder{},
 		}, variables)
 		Expect(err).ToNot(HaveOccurred())
-		cernboxgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cernboxgw"].GrpcAddress))
+		cernboxgw, err = pool.GetGatewayServiceClient(context.Background(), pool.Endpoint(revads["cernboxgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
-		cesnetgw, err = pool.GetGatewayServiceClient(pool.Endpoint(revads["cesnetgw"].GrpcAddress))
+		cesnetgw, err = pool.GetGatewayServiceClient(context.Background(), pool.Endpoint(revads["cesnetgw"].GrpcAddress))
 		Expect(err).ToNot(HaveOccurred())
 		cernbox.Services[0].Endpoint.Path = "http://" + revads["cernboxhttp"].GrpcAddress + "/ocm"
 

@@ -27,15 +27,20 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "authregistry"
+const tracerName = "authregistry"
+
 func init() {
-	rgrpc.Register("authregistry", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	reg auth.Registry
 }
 
@@ -102,6 +107,9 @@ func getRegistry(c *config) (auth.Registry, error) {
 }
 
 func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAuthProvidersRequest) (*registrypb.ListAuthProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAuthProviders")
+	defer span.End()
+
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListAuthProvidersResponse{
@@ -117,6 +125,9 @@ func (s *service) ListAuthProviders(ctx context.Context, req *registrypb.ListAut
 }
 
 func (s *service) GetAuthProviders(ctx context.Context, req *registrypb.GetAuthProvidersRequest) (*registrypb.GetAuthProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAuthProviders")
+	defer span.End()
+
 	pinfo, err := s.reg.GetProvider(ctx, req.Type)
 	if err != nil {
 		return &registrypb.GetAuthProvidersResponse{

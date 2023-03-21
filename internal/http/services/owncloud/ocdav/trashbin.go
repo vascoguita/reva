@@ -36,7 +36,7 @@ import (
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/router"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 )
@@ -54,6 +54,9 @@ func (h *TrashbinHandler) init(c *Config) error {
 // Handler handles requests.
 func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Trashbin HTTP Handler")
+		defer span.End()
+
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
 
@@ -105,7 +108,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 		// If not, we user the user home to route the request
 		basePath := r.URL.Query().Get("base_path")
 		if basePath == "" {
-			gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+			gc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.c.GatewaySvc))
 			if err != nil {
 				// TODO(jfd) how do we make the user aware that some storages are not available?
 				// opaque response property? Or a list of errors?
@@ -122,7 +125,7 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 				return
 			}
 			if getHomeRes.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(log, w, getHomeRes.Status)
+				HandleErrorStatus(ctx, log, w, getHomeRes.Status)
 				return
 			}
 			basePath = getHomeRes.Path
@@ -163,9 +166,10 @@ func (h *TrashbinHandler) Handler(s *svc) http.Handler {
 }
 
 func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "list_trashbin")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "listTrashbin")
 	defer span.End()
 
+	ctx := r.Context()
 	depth := r.Header.Get(HeaderDepth)
 	if depth == "" {
 		depth = "1"
@@ -205,7 +209,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	gc, err := pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+	gc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.c.GatewaySvc))
 	if err != nil {
 		// TODO(jfd) how do we make the user aware that some storages are not available?
 		// opaque response property? Or a list of errors?
@@ -225,7 +229,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 	}
 
 	if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, getRecycleRes.Status)
 		return
 	}
 
@@ -252,7 +256,7 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 			}
 
 			if getRecycleRes.Status.Code != rpc.Code_CODE_OK {
-				HandleErrorStatus(&sublog, w, getRecycleRes.Status)
+				HandleErrorStatus(ctx, &sublog, w, getRecycleRes.Status)
 				return
 			}
 			items = append(items, getRecycleRes.RecycleItems...)
@@ -286,10 +290,13 @@ func (h *TrashbinHandler) listTrashbin(w http.ResponseWriter, r *http.Request, s
 }
 
 func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, items []*provider.RecycleItem, basePath string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "formatTrashPropfind")
+	defer span.End()
+
 	responses := make([]*responseXML, 0, len(items)+1)
 	// add trashbin dir . entry
 	responses = append(responses, &responseXML{
-		Href: encodePath(ctx.Value(ctxKeyBaseURI).(string) + "/"), // url encode response.Href TODO
+		Href: encodePath(ctx, ctx.Value(ctxKeyBaseURI).(string)+"/"), // url encode response.Href TODO
 		Propstat: []propstatXML{
 			{
 				Status: "HTTP/1.1 200 OK",
@@ -331,6 +338,9 @@ func (h *TrashbinHandler) formatTrashPropfind(ctx context.Context, s *svc, u *us
 // the key is the name of an entry in the trash listing
 // for now we need to limit trash to the users home, so we can expect all trash keys to have the home storage as the opaque id.
 func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *userpb.User, pf *propfindXML, item *provider.RecycleItem, basePath string) (*responseXML, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "itemToPropResponse")
+	defer span.End()
+
 	baseURI := ctx.Value(ctxKeyBaseURI).(string)
 	ref := path.Join(baseURI, u.Username, item.Key)
 	if item.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -338,7 +348,7 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 	}
 
 	response := responseXML{
-		Href:     encodePath(ref), // url encode response.Href
+		Href:     encodePath(ctx, ref), // url encode response.Href
 		Propstat: []propstatXML{},
 	}
 
@@ -439,9 +449,10 @@ func (h *TrashbinHandler) itemToPropResponse(ctx context.Context, s *svc, u *use
 }
 
 func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, dst, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "restore")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "restore")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Logger()
 
 	overwrite := r.Header.Get(HeaderOverwrite)
@@ -456,7 +467,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -479,7 +490,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 	}
 
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, dstStatRes.Status)
 		return
 	}
 
@@ -498,7 +509,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if parentStatResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
+			HandleErrorStatus(ctx, &sublog, w, &rpc.Status{Code: rpc.Code_CODE_FAILED_PRECONDITION})
 			return
 		}
 	}
@@ -515,7 +526,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 				message: "The destination node already exists, and the overwrite header is set to false",
 				header:  HeaderOverwrite,
 			})
-			HandleWebdavError(&sublog, w, b, err)
+			HandleWebdavError(ctx, &sublog, w, b, err)
 			return
 		}
 		// delete existing tree
@@ -528,7 +539,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		}
 
 		if delRes.Status.Code != rpc.Code_CODE_OK && delRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-			HandleErrorStatus(&sublog, w, delRes.Status)
+			HandleErrorStatus(ctx, &sublog, w, delRes.Status)
 			return
 		}
 	}
@@ -559,9 +570,9 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 				code:    SabredavPermissionDenied,
 				message: "Permission denied to restore",
 			})
-			HandleWebdavError(&sublog, w, b, err)
+			HandleWebdavError(ctx, &sublog, w, b, err)
 		}
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(ctx, &sublog, w, res.Status)
 		return
 	}
 
@@ -572,7 +583,7 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, dstStatRes.Status)
 		return
 	}
 
@@ -587,12 +598,13 @@ func (h *TrashbinHandler) restore(w http.ResponseWriter, r *http.Request, s *svc
 
 // delete has only a key.
 func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc, u *userpb.User, basePath, key, itemPath string) {
-	ctx, span := rtrace.Provider.Tracer("trash-bin").Start(r.Context(), "erase")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "delete")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("key", key).Logger()
 
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -626,7 +638,7 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 			code:    SabredavConflict,
 			message: m,
 		})
-		HandleWebdavError(&sublog, w, b, err)
+		HandleWebdavError(ctx, &sublog, w, b, err)
 	case rpc.Code_CODE_PERMISSION_DENIED:
 		w.WriteHeader(http.StatusForbidden)
 		var m string
@@ -639,9 +651,9 @@ func (h *TrashbinHandler) delete(w http.ResponseWriter, r *http.Request, s *svc,
 			code:    SabredavPermissionDenied,
 			message: m,
 		})
-		HandleWebdavError(&sublog, w, b, err)
+		HandleWebdavError(ctx, &sublog, w, b, err)
 	default:
-		HandleErrorStatus(&sublog, w, res.Status)
+		HandleErrorStatus(ctx, &sublog, w, res.Status)
 	}
 }
 

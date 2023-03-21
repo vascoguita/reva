@@ -23,9 +23,13 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (s *svc) doOpenidConfiguration(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "doOpenidConfiguration")
+	defer span.End()
+
 	log := appctx.GetLogger(r.Context())
 	pm := &ProviderMetadata{
 		Issuer:                s.conf.Issuer,

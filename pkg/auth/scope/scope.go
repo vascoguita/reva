@@ -24,8 +24,11 @@ import (
 
 	authpb "github.com/cs3org/go-cs3apis/cs3/auth/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 )
+
+const tracerName = "scope"
 
 // Verifier is the function signature which every scope verifier should implement.
 type Verifier func(context.Context, *authpb.Scope, interface{}, *zerolog.Logger) (bool, error)
@@ -43,6 +46,9 @@ var supportedScopes = map[string]Verifier{
 // VerifyScope is the function to be called when dismantling tokens to check if
 // the token has access to a particular resource.
 func VerifyScope(ctx context.Context, scopeMap map[string]*authpb.Scope, resource interface{}) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "VerifyScope")
+	defer span.End()
+
 	logger := appctx.GetLogger(ctx)
 	for k, scope := range scopeMap {
 		for s, f := range supportedScopes {

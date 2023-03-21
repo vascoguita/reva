@@ -29,11 +29,15 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "createGroupShare")
+	defer span.End()
+
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -80,5 +84,5 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	h.createCs3Share(w, r, c, createShareReq, statInfo)
 }

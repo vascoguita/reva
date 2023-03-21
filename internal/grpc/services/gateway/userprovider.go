@@ -27,11 +27,15 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetUserResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUser")
+	defer span.End()
+
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(s.c.UserProviderEndpoint))
 	if err != nil {
 		return &user.GetUserResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -47,7 +51,10 @@ func (s *svc) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.GetU
 }
 
 func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimRequest) (*user.GetUserByClaimResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserByClaim")
+	defer span.End()
+
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(s.c.UserProviderEndpoint))
 	if err != nil {
 		return &user.GetUserByClaimResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -63,8 +70,11 @@ func (s *svc) GetUserByClaim(ctx context.Context, req *user.GetUserByClaimReques
 }
 
 func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.FindUsersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "FindUsers")
+	defer span.End()
+
 	if strings.HasPrefix(req.Filter, "sm:") {
-		c, err := pool.GetOCMInviteManagerClient(pool.Endpoint(s.c.OCMInviteManagerEndpoint))
+		c, err := pool.GetOCMInviteManagerClient(ctx, pool.Endpoint(s.c.OCMInviteManagerEndpoint))
 		if err != nil {
 			return &user.FindUsersResponse{
 				Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -92,7 +102,7 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 		}, nil
 	}
 
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(s.c.UserProviderEndpoint))
 	if err != nil {
 		return &user.FindUsersResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),
@@ -108,7 +118,10 @@ func (s *svc) FindUsers(ctx context.Context, req *user.FindUsersRequest) (*user.
 }
 
 func (s *svc) GetUserGroups(ctx context.Context, req *user.GetUserGroupsRequest) (*user.GetUserGroupsResponse, error) {
-	c, err := pool.GetUserProviderServiceClient(pool.Endpoint(s.c.UserProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetUserGroups")
+	defer span.End()
+
+	c, err := pool.GetUserProviderServiceClient(ctx, pool.Endpoint(s.c.UserProviderEndpoint))
 	if err != nil {
 		return &user.GetUserGroupsResponse{
 			Status: status.NewInternal(ctx, err, "error getting auth client"),

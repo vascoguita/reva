@@ -22,14 +22,20 @@ import (
 	"context"
 
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
+
+const tracerName = "useragent"
 
 // NewUnary returns a new unary interceptor that adds
 // the useragent to the context.
 func NewUnary() grpc.UnaryServerInterceptor {
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "useragent UnaryServerInterceptor")
+		defer span.End()
+
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
 				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
@@ -45,6 +51,9 @@ func NewUnary() grpc.UnaryServerInterceptor {
 func NewStream() grpc.StreamServerInterceptor {
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "useragent StreamServerInterceptor")
+		defer span.End()
+
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
 			if lst, ok := md[ctxpkg.UserAgentHeader]; ok && len(lst) != 0 {
 				ctx = metadata.AppendToOutgoingContext(ctx, ctxpkg.UserAgentHeader, lst[0])
@@ -57,6 +66,8 @@ func NewStream() grpc.StreamServerInterceptor {
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "useragent newWrappedServerStream")
+	defer span.End()
 	return &wrappedServerStream{ServerStream: ss, newCtx: ctx}
 }
 

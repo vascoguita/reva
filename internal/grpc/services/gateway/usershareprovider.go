@@ -34,16 +34,20 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/grants"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 )
 
 // TODO(labkode): add multi-phase commit logic when commit share or commit ref is enabled.
 func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareRequest) (*collaboration.CreateShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateShare")
+	defer span.End()
+
 	if s.isSharedFolder(ctx, req.ResourceInfo.GetPath()) {
 		return nil, errtypes.AlreadyExists("gateway: can't share the share folder itself")
 	}
 
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		return &collaboration.CreateShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -96,7 +100,10 @@ func (s *svc) CreateShare(ctx context.Context, req *collaboration.CreateShareReq
 }
 
 func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareRequest) (*collaboration.RemoveShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RemoveShare")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		return &collaboration.RemoveShareResponse{
 			Status: status.NewInternal(ctx, err, "error getting user share provider client"),
@@ -156,11 +163,17 @@ func (s *svc) RemoveShare(ctx context.Context, req *collaboration.RemoveShareReq
 // If there are any inconsistencies, the share needs to be flag as invalid and a background process
 // or active fix needs to be performed.
 func (s *svc) GetShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetShare")
+	defer span.End()
+
 	return s.getShare(ctx, req)
 }
 
 func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) (*collaboration.GetShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getShare")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.GetShareResponse{
@@ -178,7 +191,10 @@ func (s *svc) getShare(ctx context.Context, req *collaboration.GetShareRequest) 
 
 // TODO(labkode): read GetShare comment.
 func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesRequest) (*collaboration.ListSharesResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListShares")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.ListSharesResponse{
@@ -195,7 +211,10 @@ func (s *svc) ListShares(ctx context.Context, req *collaboration.ListSharesReque
 }
 
 func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareRequest) (*collaboration.UpdateShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateShare")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.UpdateShareResponse{
@@ -239,7 +258,10 @@ func (s *svc) UpdateShare(ctx context.Context, req *collaboration.UpdateShareReq
 // received shares. The display name of the shares should be the a friendly name, like the basename
 // of the original file.
 func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListReceivedSharesRequest) (*collaboration.ListReceivedSharesResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListReceivedShares")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.ListReceivedSharesResponse{
@@ -255,7 +277,10 @@ func (s *svc) ListReceivedShares(ctx context.Context, req *collaboration.ListRec
 }
 
 func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceivedShareRequest) (*collaboration.GetReceivedShareResponse, error) {
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetReceivedShare")
+	defer span.End()
+
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err := errors.Wrap(err, "gateway: error getting user share provider client")
 		return &collaboration.GetReceivedShareResponse{
@@ -276,6 +301,9 @@ func (s *svc) GetReceivedShare(ctx context.Context, req *collaboration.GetReceiv
 //  1. if received share is mounted: we also do a rename in the storage
 //  2. if received share is not mounted: we only rename in user share provider.
 func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.UpdateReceivedShareRequest) (*collaboration.UpdateReceivedShareResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "UpdateReceivedShare")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	// sanity checks
@@ -298,7 +326,7 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 		}, nil
 	}
 
-	c, err := pool.GetUserShareProviderClient(pool.Endpoint(s.c.UserShareProviderEndpoint))
+	c, err := pool.GetUserShareProviderClient(ctx, pool.Endpoint(s.c.UserShareProviderEndpoint))
 	if err != nil {
 		err = errors.Wrap(err, "gateway: error calling GetUserShareProviderClient")
 		return &collaboration.UpdateReceivedShareResponse{
@@ -369,6 +397,9 @@ func (s *svc) UpdateReceivedShare(ctx context.Context, req *collaboration.Update
 }
 
 func (s *svc) removeReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "removeReference")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 
 	idReference := &provider.Reference{ResourceId: resourceID}
@@ -440,6 +471,9 @@ func (s *svc) removeReference(ctx context.Context, resourceID *provider.Resource
 }
 
 func (s *svc) createReference(ctx context.Context, resourceID *provider.ResourceId) *rpc.Status {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "createReference")
+	defer span.End()
+
 	ref := &provider.Reference{
 		ResourceId: resourceID,
 	}
@@ -519,6 +553,9 @@ func (s *svc) createReference(ctx context.Context, resourceID *provider.Resource
 }
 
 func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee) (*rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "denyGrant")
+	defer span.End()
+
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -549,6 +586,9 @@ func (s *svc) denyGrant(ctx context.Context, id *provider.ResourceId, g *provide
 }
 
 func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "addGrant")
+	defer span.End()
+
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -582,6 +622,9 @@ func (s *svc) addGrant(ctx context.Context, id *provider.ResourceId, g *provider
 }
 
 func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "updateGrant")
+	defer span.End()
+
 	ref := &provider.Reference{
 		ResourceId: id,
 	}
@@ -614,6 +657,9 @@ func (s *svc) updateGrant(ctx context.Context, id *provider.ResourceId, g *provi
 }
 
 func (s *svc) removeGrant(ctx context.Context, id *provider.ResourceId, g *provider.Grantee, p *provider.ResourcePermissions) (*rpc.Status, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "removeGrant")
+	defer span.End()
+
 	ref := &provider.Reference{
 		ResourceId: id,
 	}

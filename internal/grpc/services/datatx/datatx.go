@@ -32,13 +32,17 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "datatx"
+const tracerName = "datatx"
+
 func init() {
-	rgrpc.Register("datatx", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -53,6 +57,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf          *config
 	txManager     txdriver.Manager
 	txShareDriver *txShareDriver
@@ -146,6 +151,9 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransferRequest) (*datatx.CreateTransferResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateTransfer")
+	defer span.End()
+
 	txInfo, startTransferErr := s.txManager.CreateTransfer(ctx, req.SrcTargetUri, req.DestTargetUri)
 
 	// we always save the transfer regardless of start transfer outcome
@@ -183,6 +191,9 @@ func (s *service) CreateTransfer(ctx context.Context, req *datatx.CreateTransfer
 }
 
 func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransferStatusRequest) (*datatx.GetTransferStatusResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetTransferStatus")
+	defer span.End()
+
 	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().GetOpaqueId()]
 	if !ok {
 		return nil, errtypes.InternalError("datatx service: transfer not found")
@@ -206,6 +217,9 @@ func (s *service) GetTransferStatus(ctx context.Context, req *datatx.GetTransfer
 }
 
 func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransferRequest) (*datatx.CancelTransferResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CancelTransfer")
+	defer span.End()
+
 	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().OpaqueId]
 	if !ok {
 		return nil, errtypes.InternalError("datatx service: transfer not found")
@@ -230,6 +244,9 @@ func (s *service) CancelTransfer(ctx context.Context, req *datatx.CancelTransfer
 }
 
 func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRequest) (*datatx.ListTransfersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListTransfers")
+	defer span.End()
+
 	filters := req.Filters
 	var txInfos []*datatx.TxInfo
 	for _, txShare := range s.txShareDriver.model.TxShares {
@@ -259,6 +276,9 @@ func (s *service) ListTransfers(ctx context.Context, req *datatx.ListTransfersRe
 }
 
 func (s *service) RetryTransfer(ctx context.Context, req *datatx.RetryTransferRequest) (*datatx.RetryTransferResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RetryTransfer")
+	defer span.End()
+
 	txShare, ok := s.txShareDriver.model.TxShares[req.GetTxId().GetOpaqueId()]
 	if !ok {
 		return nil, errtypes.InternalError("datatx service: transfer not found")

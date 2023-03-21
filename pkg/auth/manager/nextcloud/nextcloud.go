@@ -33,9 +33,12 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/auth"
 	"github.com/cs3org/reva/pkg/auth/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "nextcloud"
 
 func init() {
 	registry.Register("nextcloud", New)
@@ -121,6 +124,9 @@ func (am *Manager) SetHTTPClient(c *http.Client) {
 }
 
 func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "do")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	url := am.endPoint + "~" + a.username + "/api/auth/" + a.verb
 	log.Info().Msgf("am.do %s %s %s", url, a.argS, am.sharedSecret)
@@ -151,6 +157,9 @@ func (am *Manager) do(ctx context.Context, a Action) (int, []byte, error) {
 
 // Authenticate method as defined in https://github.com/cs3org/reva/blob/28500a8/pkg/auth/auth.go#L31-L33
 func (am *Manager) Authenticate(ctx context.Context, clientID, clientSecret string) (*user.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	type paramsObj struct {
 		ClientID     string `json:"clientID"`
 		ClientSecret string `json:"clientSecret"`

@@ -27,8 +27,11 @@ import (
 	"time"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 )
+
+const tracerName = "log"
 
 // New returns a new HTTP middleware that logs HTTP requests and responses.
 // TODO(labkode): maybe log to another file?
@@ -50,6 +53,9 @@ type loggingHandler struct {
 }
 
 func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	req, span := tracing.SpanStartFromRequest(req, tracerName, "log Interceptor HTTP Handler")
+	defer span.End()
+
 	log := appctx.GetLogger(req.Context())
 	t := time.Now()
 	logger := makeLogger(w)
@@ -71,6 +77,9 @@ func makeLogger(w http.ResponseWriter) loggingResponseWriter {
 }
 
 func writeLog(log *zerolog.Logger, req *http.Request, url url.URL, ts time.Time, status, size int) {
+	req, span := tracing.SpanStartFromRequest(req, tracerName, "writeLog")
+	defer span.End()
+
 	end := time.Now()
 	host, _, err := net.SplitHostPort(req.RemoteAddr)
 

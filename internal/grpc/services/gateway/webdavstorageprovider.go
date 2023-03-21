@@ -30,6 +30,7 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/pkg/errors"
 	"github.com/studio-b12/gowebdav"
 )
@@ -41,6 +42,9 @@ type webdavEndpoint struct {
 }
 
 func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries ...string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefStat")
+	defer span.End()
+
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return nil, err
@@ -68,6 +72,9 @@ func (s *svc) webdavRefStat(ctx context.Context, targetURL string, nameQueries .
 }
 
 func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefLs")
+	defer span.End()
+
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return nil, err
@@ -101,6 +108,9 @@ func (s *svc) webdavRefLs(ctx context.Context, targetURL string, nameQueries ...
 }
 
 func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries ...string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefMkdir")
+	defer span.End()
+
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return err
@@ -126,6 +136,9 @@ func (s *svc) webdavRefMkdir(ctx context.Context, targetURL string, nameQueries 
 }
 
 func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefMove")
+	defer span.End()
+
 	srcURL, err := appendNameQuery(targetURL, src)
 	if err != nil {
 		return err
@@ -159,6 +172,9 @@ func (s *svc) webdavRefMove(ctx context.Context, targetURL, src, destination str
 }
 
 func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries ...string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefDelete")
+	defer span.End()
+
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return err
@@ -184,6 +200,9 @@ func (s *svc) webdavRefDelete(ctx context.Context, targetURL string, nameQueries
 }
 
 func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, nameQueries ...string) (string, *types.Opaque, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "webdavRefTransferEndpoint")
+	defer span.End()
+
 	targetURL, err := appendNameQuery(targetURL, nameQueries...)
 	if err != nil {
 		return "", nil, err
@@ -213,6 +232,9 @@ func (s *svc) webdavRefTransferEndpoint(ctx context.Context, targetURL string, n
 }
 
 func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webdavEndpoint, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "extractEndpointInfo")
+	defer span.End()
+
 	if targetURL == "" {
 		return nil, errtypes.BadRequest("gateway: ref target is an empty uri")
 	}
@@ -238,6 +260,9 @@ func (s *svc) extractEndpointInfo(ctx context.Context, targetURL string) (*webda
 }
 
 func (s *svc) getWebdavEndpoint(ctx context.Context, domain string) (string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getWebdavEndpoint")
+	defer span.End()
+
 	meshProvider, err := s.GetInfoByDomain(ctx, &ocmprovider.GetInfoByDomainRequest{
 		Domain: domain,
 	})

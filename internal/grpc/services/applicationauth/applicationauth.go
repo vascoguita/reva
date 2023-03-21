@@ -27,13 +27,17 @@ import (
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "applicationauth"
+const tracerName = "applicationauth"
+
 func init() {
-	rgrpc.Register("applicationauth", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type config struct {
@@ -42,6 +46,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf *config
 	am   appauth.Manager
 }
@@ -102,6 +107,9 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.GenerateAppPasswordRequest) (*appauthpb.GenerateAppPasswordResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GenerateAppPassword")
+	defer span.End()
+
 	pwd, err := s.am.GenerateAppPassword(ctx, req.TokenScope, req.Label, req.Expiration)
 	if err != nil {
 		return &appauthpb.GenerateAppPasswordResponse{
@@ -116,6 +124,9 @@ func (s *service) GenerateAppPassword(ctx context.Context, req *appauthpb.Genera
 }
 
 func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPasswordsRequest) (*appauthpb.ListAppPasswordsResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAppPasswords")
+	defer span.End()
+
 	pwds, err := s.am.ListAppPasswords(ctx)
 	if err != nil {
 		return &appauthpb.ListAppPasswordsResponse{
@@ -130,6 +141,9 @@ func (s *service) ListAppPasswords(ctx context.Context, req *appauthpb.ListAppPa
 }
 
 func (s *service) InvalidateAppPassword(ctx context.Context, req *appauthpb.InvalidateAppPasswordRequest) (*appauthpb.InvalidateAppPasswordResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "InvalidateAppPassword")
+	defer span.End()
+
 	err := s.am.InvalidateAppPassword(ctx, req.Password)
 	if err != nil {
 		return &appauthpb.InvalidateAppPasswordResponse{
@@ -143,6 +157,9 @@ func (s *service) InvalidateAppPassword(ctx context.Context, req *appauthpb.Inva
 }
 
 func (s *service) GetAppPassword(ctx context.Context, req *appauthpb.GetAppPasswordRequest) (*appauthpb.GetAppPasswordResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetAppPassword")
+	defer span.End()
+
 	pwd, err := s.am.GetAppPassword(ctx, req.User, req.Password)
 	if err != nil {
 		return &appauthpb.GetAppPasswordResponse{

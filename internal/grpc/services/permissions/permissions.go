@@ -27,10 +27,13 @@ import (
 	"github.com/cs3org/reva/pkg/permission"
 	"github.com/cs3org/reva/pkg/permission/manager/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "permissions"
 
 func init() {
 	rgrpc.Register("permissions", New)
@@ -51,6 +54,7 @@ func parseConfig(m map[string]interface{}) (*config, error) {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	manager permission.Manager
 }
 
@@ -87,6 +91,9 @@ func (s *service) Register(ss *grpc.Server) {
 }
 
 func (s *service) CheckPermission(ctx context.Context, req *permissions.CheckPermissionRequest) (*permissions.CheckPermissionResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CheckPermission")
+	defer span.End()
+
 	var subject string
 	switch ref := req.SubjectRef.Spec.(type) {
 	case *permissions.SubjectReference_UserId:

@@ -31,12 +31,11 @@ import (
 	"github.com/cs3org/reva/internal/grpc/interceptors/token"
 	"github.com/cs3org/reva/internal/grpc/interceptors/useragent"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -80,6 +79,7 @@ type Service interface {
 	Register(ss *grpc.Server)
 	io.Closer
 	UnprotectedEndpoints() []string
+	tracing.GrpcMiddlewarer
 }
 
 type unaryInterceptorTriple struct {
@@ -199,7 +199,8 @@ func (s *Server) registerServices() error {
 	}
 	grpcServer := grpc.NewServer(opts...)
 
-	for _, svc := range s.services {
+	for name, svc := range s.services {
+		svc.SetInterceptors(name)
 		svc.Register(grpcServer)
 	}
 
@@ -282,19 +283,15 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		s.log.Info().Msgf("rgrpc: chaining grpc unary interceptor %s with priority %d", t.Name, t.Priority)
 	}
 
-	unaryInterceptors = append(unaryInterceptors,
-		otelgrpc.UnaryServerInterceptor(
-			otelgrpc.WithTracerProvider(rtrace.Provider),
-			otelgrpc.WithPropagators(rtrace.Propagator)),
-	)
-
 	unaryInterceptors = append([]grpc.UnaryServerInterceptor{
+		tracing.UnaryServerInterceptor(),
 		appctx.NewUnary(s.log),
 		token.NewUnary(),
 		useragent.NewUnary(),
 		log.NewUnary(),
 		recovery.NewUnary(),
 	}, unaryInterceptors...)
+
 	unaryChain := grpc_middleware.ChainUnaryServer(unaryInterceptors...)
 
 	streamTriples := []*streamInterceptorTriple{}
@@ -330,6 +327,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 	}
 
 	streamInterceptors = append([]grpc.StreamServerInterceptor{
+		tracing.StreamServerInterceptor(),
 		authStream,
 		appctx.NewStream(s.log),
 		token.NewStream(),
@@ -337,6 +335,7 @@ func (s *Server) getInterceptors(unprotected []string) ([]grpc.ServerOption, err
 		log.NewStream(),
 		recovery.NewStream(),
 	}, streamInterceptors...)
+
 	streamChain := grpc_middleware.ChainStreamServer(streamInterceptors...)
 
 	opts := []grpc.ServerOption{

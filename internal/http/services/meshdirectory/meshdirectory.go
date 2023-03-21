@@ -19,6 +19,7 @@
 package meshdirectory
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,11 +31,14 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	meshdirectoryweb "github.com/sciencemesh/meshdirectory-web"
 )
+
+const tracerName = "meshdirectory"
 
 func init() {
 	global.Register("meshdirectory", New)
@@ -54,6 +58,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf *config
 }
 
@@ -96,16 +101,21 @@ func (s *svc) Close() error {
 	return nil
 }
 
-func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+func (s *svc) getClient(ctx context.Context) (gateway.GatewayAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getClient")
+	defer span.End()
+	return pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 }
 
 func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "serveJSON")
+	defer span.End()
+
 	w.Header().Set("Content-Type", "application/json")
 
 	ctx := r.Context()
 
-	gatewayClient, err := s.getClient()
+	gatewayClient, err := s.getClient(ctx)
 	if err != nil {
 		reqres.WriteError(w, r, reqres.APIErrorServerError,
 			fmt.Sprintf("error getting grpc client on addr: %v", s.conf.GatewaySvc), err)
@@ -137,6 +147,9 @@ func (s *svc) serveJSON(w http.ResponseWriter, r *http.Request) {
 // HTTP service handler.
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Meshdirectory Service HTTP Handler")
+		defer span.End()
+
 		var head string
 		head, r.URL.Path = router.ShiftPath(r.URL.Path)
 		switch head {

@@ -30,9 +30,12 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "machine"
 
 // 'machine' is an authentication method used to impersonate users.
 // To impersonate the given user it's only needed an api-key, saved
@@ -71,11 +74,14 @@ func New(conf map[string]interface{}) (auth.Manager, error) {
 
 // Authenticate impersonate an user if the provided secret is equal to the api-key.
 func (m *manager) Authenticate(ctx context.Context, user, secret string) (*userpb.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
 	if m.APIKey != secret {
 		return nil, nil, errtypes.InvalidCredentials("")
 	}
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(m.GatewayAddr))
+	gtw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(m.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

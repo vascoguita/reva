@@ -32,9 +32,12 @@ import (
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/fs/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/eosfs"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "eoswrapper"
 
 func init() {
 	registry.Register("eoswrapper", New)
@@ -105,6 +108,9 @@ func New(m map[string]interface{}) (storage.FS, error) {
 // StorageId in the ResourceInfo objects.
 
 func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []string) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetMD")
+	defer span.End()
+
 	res, err := w.FS.GetMD(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
@@ -124,6 +130,9 @@ func (w *wrapper) GetMD(ctx context.Context, ref *provider.Reference, mdKeys []s
 }
 
 func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKeys []string) ([]*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListFolder")
+	defer span.End()
+
 	res, err := w.FS.ListFolder(ctx, ref, mdKeys)
 	if err != nil {
 		return nil, err
@@ -138,6 +147,9 @@ func (w *wrapper) ListFolder(ctx context.Context, ref *provider.Reference, mdKey
 }
 
 func (w *wrapper) ListRevisions(ctx context.Context, ref *provider.Reference) ([]*provider.FileVersion, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListRevisions")
+	defer span.End()
+
 	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
 		return nil, err
 	}
@@ -146,6 +158,9 @@ func (w *wrapper) ListRevisions(ctx context.Context, ref *provider.Reference) ([
 }
 
 func (w *wrapper) DownloadRevision(ctx context.Context, ref *provider.Reference, revisionKey string) (io.ReadCloser, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DownloadRevision")
+	defer span.End()
+
 	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
 		return nil, err
 	}
@@ -154,6 +169,9 @@ func (w *wrapper) DownloadRevision(ctx context.Context, ref *provider.Reference,
 }
 
 func (w *wrapper) RestoreRevision(ctx context.Context, ref *provider.Reference, revisionKey string) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "RestoreRevision")
+	defer span.End()
+
 	if err := w.userIsProjectAdmin(ctx, ref); err != nil {
 		return err
 	}
@@ -162,6 +180,9 @@ func (w *wrapper) RestoreRevision(ctx context.Context, ref *provider.Reference, 
 }
 
 func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *provider.Grantee) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "DenyGrant")
+	defer span.End()
+
 	// This is only allowed for project space admins
 	if strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
 		if err := w.userIsProjectAdmin(ctx, ref); err != nil {
@@ -174,6 +195,9 @@ func (w *wrapper) DenyGrant(ctx context.Context, ref *provider.Reference, g *pro
 }
 
 func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getMountID")
+	defer span.End()
+
 	if r == nil {
 		return ""
 	}
@@ -185,6 +209,9 @@ func (w *wrapper) getMountID(ctx context.Context, r *provider.ResourceInfo) stri
 }
 
 func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.ResourceInfo) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "setProjectSharingPermissions")
+	defer span.End()
+
 	// Check if this storage provider corresponds to a project spaces instance
 	if strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
 		// Extract project name from the path resembling /c/cernbox or /c/cernbox/minutes/..
@@ -213,6 +240,9 @@ func (w *wrapper) setProjectSharingPermissions(ctx context.Context, r *provider.
 }
 
 func (w *wrapper) userIsProjectAdmin(ctx context.Context, ref *provider.Reference) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "userIsProjectAdmin")
+	defer span.End()
+
 	// Check if this storage provider corresponds to a project spaces instance
 	if !strings.HasPrefix(w.conf.Namespace, eosProjectsNamespace) {
 		return nil

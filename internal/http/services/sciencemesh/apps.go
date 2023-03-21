@@ -39,9 +39,9 @@ type appsHandler struct {
 	ocmMountPoint string
 }
 
-func (h *appsHandler) init(c *config) error {
+func (h *appsHandler) init(ctx context.Context, c *config) error {
 	var err error
-	h.gatewayClient, err = pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	h.gatewayClient, err = pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return err
 	}

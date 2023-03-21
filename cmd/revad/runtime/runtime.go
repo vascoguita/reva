@@ -34,7 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/sharedconf"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
@@ -73,24 +73,16 @@ func RunWithOptions(mainConf map[string]interface{}, pidFile string, opts ...Opt
 }
 
 type coreConf struct {
-	MaxCPUs            string `mapstructure:"max_cpus"`
-	TracingEnabled     bool   `mapstructure:"tracing_enabled"`
-	TracingEndpoint    string `mapstructure:"tracing_endpoint"`
-	TracingCollector   string `mapstructure:"tracing_collector"`
-	TracingServiceName string `mapstructure:"tracing_service_name"`
-
-	// TracingService specifies the service. i.e OpenCensus, OpenTelemetry, OpenTracing...
-	TracingService string `mapstructure:"tracing_service"`
+	MaxCPUs string `mapstructure:"max_cpus"`
 }
 
 func run(mainConf map[string]interface{}, coreConf *coreConf, logger *zerolog.Logger, filename string) {
 	host, _ := os.Hostname()
 	logger.Info().Msgf("host info: %s", host)
 
-	if coreConf.TracingEnabled {
-		initTracing(coreConf)
-	}
 	initCPUCount(coreConf, logger)
+
+	tracing.Init(mainConf["tracing"], tracing.WithLogger(logger.With().Str("pkg", "tracing").Logger()))
 
 	servers := initServers(mainConf, logger)
 	watcher, err := initWatcher(logger, filename)
@@ -146,10 +138,6 @@ func initServers(mainConf map[string]interface{}, log *zerolog.Logger) map[strin
 		os.Exit(1)
 	}
 	return servers
-}
-
-func initTracing(conf *coreConf) {
-	rtrace.SetTraceProvider(conf.TracingCollector, conf.TracingEndpoint, conf.TracingServiceName)
 }
 
 func initCPUCount(conf *coreConf, log *zerolog.Logger) {
@@ -310,15 +298,6 @@ func parseCoreConfOrDie(v interface{}) *coreConf {
 	if err := mapstructure.Decode(v, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error decoding core config: %s\n", err.Error())
 		os.Exit(1)
-	}
-
-	// tracing defaults to enabled if not explicitly configured
-	if v == nil {
-		c.TracingEnabled = true
-		c.TracingEndpoint = "localhost:6831"
-	} else if _, ok := v.(map[string]interface{})["tracing_enabled"]; !ok {
-		c.TracingEnabled = true
-		c.TracingEndpoint = "localhost:6831"
 	}
 
 	return c

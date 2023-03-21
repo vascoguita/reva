@@ -30,7 +30,10 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "manager"
 
 // Config is the config for the Archiver.
 type Config struct {
@@ -113,6 +116,9 @@ func getDeepestCommonDir(files []string) string {
 
 // CreateTar creates a tar and write it into the dst Writer.
 func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateTar")
+	defer span.End()
+
 	w := tar.NewWriter(dst)
 
 	var filesCount, sizeFiles int64
@@ -185,6 +191,9 @@ func (a *Archiver) CreateTar(ctx context.Context, dst io.Writer) error {
 
 // CreateZip creates a zip and write it into the dst Writer.
 func (a *Archiver) CreateZip(ctx context.Context, dst io.Writer) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "CreateZip")
+	defer span.End()
+
 	w := zip.NewWriter(dst)
 
 	var filesCount, sizeFiles int64

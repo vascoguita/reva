@@ -30,11 +30,15 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statInfo *provider.ResourceInfo, role *conversions.Role, roleVal []byte) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "createUserShare")
+	defer span.End()
+
 	ctx := r.Context()
-	c, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	c, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -82,12 +86,16 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	h.createCs3Share(w, r, c, createShareReq, statInfo)
 }
 
 func (h *Handler) isUserShare(r *http.Request, oid string) bool {
-	logger := appctx.GetLogger(r.Context())
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "isUserShare")
+	defer span.End()
+
+	ctx := r.Context()
+	logger := appctx.GetLogger(ctx)
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		logger.Err(err)
 	}
@@ -110,9 +118,11 @@ func (h *Handler) isUserShare(r *http.Request, oid string) bool {
 }
 
 func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareID string) {
-	ctx := r.Context()
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "removeUserShare")
+	defer span.End()
 
-	uClient, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	ctx := r.Context()
+	uClient, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting grpc gateway client", err)
 		return
@@ -166,6 +176,9 @@ func (h *Handler) removeUserShare(w http.ResponseWriter, r *http.Request, shareI
 }
 
 func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filter) ([]*conversions.ShareData, *rpc.Status, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "listUserShares")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -176,7 +189,7 @@ func (h *Handler) listUserShares(r *http.Request, filters []*collaboration.Filte
 	ocsDataPayload := make([]*conversions.ShareData, 0)
 	if h.gatewayAddr != "" {
 		// get a connection to the users share provider
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 		if err != nil {
 			return ocsDataPayload, nil, err
 		}

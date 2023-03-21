@@ -34,6 +34,7 @@ import (
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/go-chi/chi/v5"
@@ -42,6 +43,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const tracerName = "appprovider"
 
 func init() {
 	global.Register("appprovider", New)
@@ -62,6 +65,7 @@ func (c *Config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf   *Config
 	router *chi.Mux
 }
@@ -114,9 +118,12 @@ func (s *svc) Handler() http.Handler {
 }
 
 func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "Appprovider Service HTTP Handler")
+	defer span.End()
+
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -291,8 +298,11 @@ func (s *svc) handleNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleList")
+	defer span.End()
+
 	ctx := r.Context()
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "error getting grpc gateway client", err)
 		return
@@ -323,9 +333,12 @@ func (s *svc) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) handleOpen(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleOpen")
+	defer span.End()
+
 	ctx := r.Context()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		writeError(w, r, appErrorServerError, "Internal error with the gateway, please try again later", err)
 		return

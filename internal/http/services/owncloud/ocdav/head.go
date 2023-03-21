@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -31,26 +30,31 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/internal/grpc/services/storageprovider"
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathHead(w http.ResponseWriter, r *http.Request, ns string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "head")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathHead")
 	defer span.End()
 
 	fn := path.Join(ns, r.URL.Path)
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("path", fn).Logger()
 
 	ref := &provider.Reference{Path: fn}
-	s.handleHead(ctx, w, r, ref, sublog)
+	s.handleHead(w, r, ref, sublog)
 }
 
-func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	client, err := s.getClient()
+func (s *svc) handleHead(w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleHead")
+	defer span.End()
+
+	ctx := r.Context()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -66,7 +70,7 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 	}
 
 	if res.Status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&log, w, res.Status)
+		HandleErrorStatus(ctx, &log, w, res.Status)
 		return
 	}
 
@@ -90,9 +94,10 @@ func (s *svc) handleHead(ctx context.Context, w http.ResponseWriter, r *http.Req
 }
 
 func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx, span := rtrace.Provider.Tracer("reva").Start(r.Context(), "spaces_head")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesHead")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Str("spaceid", spaceID).Str("path", r.URL.Path).Logger()
 
 	spaceRef, status, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
@@ -103,9 +108,9 @@ func (s *svc) handleSpacesHead(w http.ResponseWriter, r *http.Request, spaceID s
 	}
 
 	if status.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, status)
+		HandleErrorStatus(ctx, &sublog, w, status)
 		return
 	}
 
-	s.handleHead(ctx, w, r, spaceRef, sublog)
+	s.handleHead(w, r, spaceRef, sublog)
 }

@@ -38,6 +38,7 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	"github.com/cs3org/reva/pkg/storage/utils/walker"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"github.com/gdexlab/go-render/render"
 	ua "github.com/mileusna/useragent"
@@ -45,7 +46,11 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const serviceName = "archiver"
+const tracerName = "archiver"
+
 type svc struct {
+	tracing.HttpMiddleware
 	config     *Config
 	gtwClient  gateway.GatewayAPIClient
 	log        *zerolog.Logger
@@ -73,6 +78,9 @@ func init() {
 
 // New creates a new archiver service.
 func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	c := &Config{}
 	err := mapstructure.Decode(conf, c)
 	if err != nil {
@@ -81,7 +89,7 @@ func New(conf map[string]interface{}, log *zerolog.Logger) (global.Service, erro
 
 	c.init()
 
-	gtw, err := pool.GetGatewayServiceClient(pool.Endpoint(c.GatewaySvc))
+	gtw, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(c.GatewaySvc))
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +127,9 @@ func (c *Config) init() {
 }
 
 func (s *svc) getFiles(ctx context.Context, files, ids []string) ([]string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getFiles")
+	defer span.End()
+
 	if len(files) == 0 && len(ids) == 0 {
 		return nil, errtypes.BadRequest("file and id lists are both empty")
 	}
@@ -205,6 +216,9 @@ func (s *svc) writeHTTPError(rw http.ResponseWriter, err error) {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Archiver Service HTTP Handler")
+		defer span.End()
+
 		// get the paths and/or the resources id from the query
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)

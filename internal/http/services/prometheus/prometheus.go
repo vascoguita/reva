@@ -23,11 +23,15 @@ import (
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"go.opencensus.io/stats/view"
 )
+
+const serviceName = "prometheus"
+const tracerName = "prometheus"
 
 func init() {
 	global.Register("prometheus", New)
@@ -64,6 +68,7 @@ func (c *config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	prefix string
 	h      http.Handler
 }

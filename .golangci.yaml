@@ -66,6 +66,11 @@ linters:
     - sqlclosecheck     # disabled because of generics - https://github.com/golangci/golangci-lint/issues/2649.
     - wastedassign      # disabled because of generics - https://github.com/golangci/golangci-lint/issues/2649.
 
+skip-dirs:
+  - tests/ocis
+  - tests/testing
+  - docs/themes/docsy
+
 linters-settings:
   goheader:
     template: |

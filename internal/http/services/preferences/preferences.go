@@ -28,10 +28,14 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "preferences"
+const tracerName = "preferences"
 
 func init() {
 	global.Register("preferences", New)
@@ -51,6 +55,7 @@ func (c *Config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf   *Config
 	router *chi.Mux
 }
@@ -97,11 +102,17 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Preferences Service HTTP Handler")
+		defer span.End()
+
 		s.router.ServeHTTP(w, r)
 	})
 }
 
 func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleGet")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -117,7 +128,7 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -165,6 +176,9 @@ func (s *svc) handleGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePost")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
@@ -181,7 +195,7 @@ func (s *svc) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.conf.GatewaySvc))
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc gateway client")
 		w.WriteHeader(http.StatusInternalServerError)

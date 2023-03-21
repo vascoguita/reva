@@ -42,6 +42,7 @@ import (
 	statuspkg "github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/token"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/cs3org/reva/pkg/utils/resourceid"
 	"google.golang.org/grpc/metadata"
@@ -53,8 +54,11 @@ const (
 )
 
 func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, user *userpb.User, gatewayAddr string, mgr token.Manager) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth expandAndVerifyScope")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(gatewayAddr))
 	if err != nil {
 		return err
 	}
@@ -96,7 +100,10 @@ func expandAndVerifyScope(ctx context.Context, req interface{}, tokenScope map[s
 	return errtypes.PermissionDenied("access to resource not allowed within the assigned scope")
 }
 
-func hasLightweightScope(tokenScope map[string]*authpb.Scope) bool {
+func hasLightweightScope(ctx context.Context, tokenScope map[string]*authpb.Scope) bool {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth hasLightweightScope")
+	defer span.End()
+
 	for scope := range tokenScope {
 		if strings.HasPrefix(scope, "lightweight") {
 			return true
@@ -106,7 +113,10 @@ func hasLightweightScope(tokenScope map[string]*authpb.Scope) bool {
 }
 
 func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[string]*authpb.Scope, client gateway.GatewayAPIClient) bool {
-	if !hasLightweightScope(tokenScope) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth checkLightweightScope")
+	defer span.End()
+
+	if !hasLightweightScope(ctx, tokenScope) {
 		return false
 	}
 
@@ -176,6 +186,9 @@ func checkLightweightScope(ctx context.Context, req interface{}, tokenScope map[
 }
 
 func parentOfResource(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.Reference, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth parentOfResource")
+	defer span.End()
+
 	if utils.IsAbsolutePathReference(ref) {
 		parent := filepath.Dir(ref.GetPath())
 		info, err := stat(ctx, client, &provider.Reference{Path: parent})
@@ -193,6 +206,9 @@ func parentOfResource(ctx context.Context, client gateway.GatewayAPIClient, ref 
 }
 
 func stat(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference) (*provider.ResourceInfo, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth stat")
+	defer span.End()
+
 	statRes, err := client.Stat(ctx, &provider.StatRequest{
 		Ref: ref,
 	})
@@ -210,6 +226,9 @@ func stat(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Re
 }
 
 func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *provider.Reference, permissionSet *provider.ResourcePermissions) bool {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth hasPermissions")
+	defer span.End()
+
 	info, err := stat(ctx, client, ref)
 	if err != nil {
 		return false
@@ -218,6 +237,9 @@ func hasPermissions(ctx context.Context, client gateway.GatewayAPIClient, ref *p
 }
 
 func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth resolvePublicShare")
+	defer span.End()
+
 	var share link.PublicShare
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -228,6 +250,9 @@ func resolvePublicShare(ctx context.Context, ref *provider.Reference, scope *aut
 }
 
 func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth resolveOCMShare")
+	defer span.End()
+
 	var share ocmv1beta1.Share
 	if err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share); err != nil {
 		return err
@@ -237,6 +262,9 @@ func resolveOCMShare(ctx context.Context, ref *provider.Reference, scope *authpb
 }
 
 func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authpb.Scope, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth resolveUserShare")
+	defer span.End()
+
 	var share collaboration.Share
 	err := utils.UnmarshalJSONToProtoV1(scope.Resource.Value, &share)
 	if err != nil {
@@ -247,6 +275,9 @@ func resolveUserShare(ctx context.Context, ref *provider.Reference, scope *authp
 }
 
 func checkCacheForNestedResource(ctx context.Context, ref *provider.Reference, resource *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) error {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth checkCacheForNestedResource")
+	defer span.End()
+
 	// Check if this ref is cached
 	key := resourceid.OwnCloudResourceIDWrap(resource) + scopeDelimiter + getRefKey(ref)
 	if _, err := scopeExpansionCache.Get(key); err == nil {
@@ -269,6 +300,9 @@ func isRelativePathOrEmpty(path string) bool {
 }
 
 func checkIfNestedResource(ctx context.Context, ref *provider.Reference, parent *provider.ResourceId, client gateway.GatewayAPIClient, mgr token.Manager) (bool, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth checkIfNestedResource")
+	defer span.End()
+
 	// Since the resource ID is obtained from the scope, the current token
 	// has access to it.
 	statResponse, err := client.Stat(ctx, &provider.StatRequest{Ref: &provider.Reference{ResourceId: parent}})

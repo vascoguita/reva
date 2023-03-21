@@ -26,6 +26,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // Response contains data for the Nextcloud mock server to respond
@@ -49,6 +51,9 @@ var responses = map[string]Response{
 // GetNextcloudServerMock returns a handler that pretends to be a remote Nextcloud server.
 func GetNextcloudServerMock(called *[]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "GetNextcloudServerMock")
+		defer span.End()
+
 		buf := new(strings.Builder)
 		_, err := io.Copy(buf, r.Body)
 		if err != nil {

@@ -41,10 +41,14 @@ import (
 	"github.com/cs3org/reva/pkg/storage/favorite"
 	"github.com/cs3org/reva/pkg/storage/favorite/registry"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "ocdav"
+const tracerName = "ocdav"
 
 type ctxKey int
 
@@ -126,6 +130,7 @@ func (c *Config) init() {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	c                *Config
 	webDavHandler    *WebDavHandler
 	davHandler       *DavHandler
@@ -188,9 +193,11 @@ func (s *svc) Unprotected() []string {
 
 func (s *svc) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "Ocdav Service HTTP Handler")
+		defer span.End()
+
 		ctx := r.Context()
 		log := appctx.GetLogger(ctx)
-
 		addAccessHeaders(w, r)
 
 		// TODO(jfd): do we need this?
@@ -259,11 +266,16 @@ func (s *svc) Handler() http.Handler {
 	})
 }
 
-func (s *svc) getClient() (gateway.GatewayAPIClient, error) {
-	return pool.GetGatewayServiceClient(pool.Endpoint(s.c.GatewaySvc))
+func (s *svc) getClient(ctx context.Context) (gateway.GatewayAPIClient, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "getClient")
+	defer span.End()
+	return pool.GetGatewayServiceClient(ctx, pool.Endpoint(s.c.GatewaySvc))
 }
 
 func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, requestPath string) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "applyLayout")
+	defer span.End()
+
 	// If useLoggedInUserNS is false, that implies that the request is coming from
 	// the FilesHandler method invoked by a /dav/files/fileOwner where fileOwner
 	// is not the same as the logged in user. In that case, we'll treat fileOwner
@@ -280,6 +292,9 @@ func applyLayout(ctx context.Context, ns string, useLoggedInUserNS bool, request
 }
 
 func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "addAccessHeaders")
+	defer span.End()
+
 	headers := w.Header()
 	// the webdav api is accessible from anywhere
 	headers.Set("Access-Control-Allow-Origin", "*")
@@ -304,6 +319,9 @@ func addAccessHeaders(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractDestination(r *http.Request) (string, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "extractDestination")
+	defer span.End()
+
 	dstHeader := r.Header.Get(HeaderDestination)
 	if dstHeader == "" {
 		return "", errors.Wrap(errInvalidValue, "destination header is empty")
@@ -326,7 +344,10 @@ func extractDestination(r *http.Request) (string, error) {
 
 // replaceAllStringSubmatchFunc is taken from 'Go: Replace String with Regular Expression Callback'
 // see: https://elliotchance.medium.com/go-replace-string-with-regular-expression-callback-f89948bad0bb
-func replaceAllStringSubmatchFunc(re *regexp.Regexp, str string, repl func([]string) string) string {
+func replaceAllStringSubmatchFunc(ctx context.Context, re *regexp.Regexp, str string, repl func([]string) string) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "replaceAllStringSubmatchFunc")
+	defer span.End()
+
 	result := ""
 	lastIndex := 0
 	for _, v := range re.FindAllSubmatchIndex([]byte(str), -1) {
@@ -346,8 +367,11 @@ var hrefre = regexp.MustCompile(`([^A-Za-z0-9_\-.~()/:@!$])`)
 //
 // slashes (/) are treated as path-separators.
 // ported from https://github.com/sabre-io/http/blob/bb27d1a8c92217b34e778ee09dcf79d9a2936e84/lib/functions.php#L369-L379
-func encodePath(path string) string {
-	return replaceAllStringSubmatchFunc(hrefre, path, func(groups []string) string {
+func encodePath(ctx context.Context, path string) string {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "encodePath")
+	defer span.End()
+
+	return replaceAllStringSubmatchFunc(ctx, hrefre, path, func(groups []string) string {
 		b := groups[1]
 		var sb strings.Builder
 		for i := 0; i < len(b); i++ {

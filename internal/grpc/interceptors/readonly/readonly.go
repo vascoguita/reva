@@ -26,10 +26,13 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	rstatus "github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+const tracerName = "readonly"
 
 const (
 	defaultPriority = 200
@@ -43,6 +46,9 @@ func init() {
 // that checks grpc calls and blocks write requests.
 func NewUnary(map[string]interface{}) (grpc.UnaryServerInterceptor, int, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "readonly UnaryServerInterceptor")
+		defer span.End()
+
 		log := appctx.GetLogger(ctx)
 
 		switch req.(type) {

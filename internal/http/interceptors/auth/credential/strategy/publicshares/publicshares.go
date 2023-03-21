@@ -24,7 +24,10 @@ import (
 
 	"github.com/cs3org/reva/internal/http/interceptors/auth/credential/registry"
 	"github.com/cs3org/reva/pkg/auth"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "publicshares"
 
 func init() {
 	registry.Register("publicshares", New)
@@ -43,6 +46,9 @@ func New(m map[string]interface{}) (auth.CredentialStrategy, error) {
 }
 
 func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth.Credentials, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "GetCredentials")
+	defer span.End()
+
 	token := r.Header.Get(headerShareToken)
 	if token == "" {
 		token = r.URL.Query().Get(headerShareToken)
@@ -61,5 +67,7 @@ func (s *strategy) GetCredentials(w http.ResponseWriter, r *http.Request) (*auth
 }
 
 func (s *strategy) AddWWWAuthenticate(w http.ResponseWriter, r *http.Request, realm string) {
+	_, span := tracing.SpanStartFromRequest(r, tracerName, "AddWWWAuthenticate")
+	defer span.End()
 	// TODO read realm from forwarded header?
 }

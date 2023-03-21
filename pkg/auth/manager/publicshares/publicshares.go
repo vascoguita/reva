@@ -33,9 +33,12 @@ import (
 	"github.com/cs3org/reva/pkg/auth/scope"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 )
+
+const tracerName = "publicshares"
 
 func init() {
 	registry.Register("publicshares", New)
@@ -78,7 +81,10 @@ func (m *manager) Configure(ml map[string]interface{}) error {
 }
 
 func (m *manager) Authenticate(ctx context.Context, token, secret string) (*user.User, map[string]*authpb.Scope, error) {
-	gwConn, err := pool.GetGatewayServiceClient(pool.Endpoint(m.c.GatewayAddr))
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "Authenticate")
+	defer span.End()
+
+	gwConn, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(m.c.GatewayAddr))
 	if err != nil {
 		return nil, nil, err
 	}

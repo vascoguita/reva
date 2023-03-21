@@ -25,10 +25,15 @@ import (
 
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/tracing"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/metadata"
 )
 
 func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "cacheWarmup")
+	defer span.End()
+
 	if s.warmupCacheTracker != nil {
 		u, ok1 := ctxpkg.ContextGetUser(r.Context())
 		tkn, ok2 := ctxpkg.ContextGetToken(r.Context())
@@ -43,6 +48,7 @@ func (s *svc) cacheWarmup(w http.ResponseWriter, r *http.Request) {
 		// And in most of the cases, the warmup takes a longer amount of time to complete than the original request.
 		// TODO: Check if we can come up with a better solution, eg, https://stackoverflow.com/a/54132324
 		ctx := context.Background()
+		ctx = trace.ContextWithSpan(ctx, span)
 		ctx = appctx.WithLogger(ctx, log)
 		ctx = ctxpkg.ContextSetUser(ctx, u)
 		ctx = ctxpkg.ContextSetToken(ctx, tkn)

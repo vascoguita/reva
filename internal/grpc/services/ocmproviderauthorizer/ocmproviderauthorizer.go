@@ -27,10 +27,13 @@ import (
 	"github.com/cs3org/reva/pkg/ocm/provider/authorizer/registry"
 	"github.com/cs3org/reva/pkg/rgrpc"
 	"github.com/cs3org/reva/pkg/rgrpc/status"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )
+
+const tracerName = "ocmproviderauthorizer"
 
 func init() {
 	rgrpc.Register("ocmproviderauthorizer", New)
@@ -42,6 +45,7 @@ type config struct {
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	conf *config
 	pa   provider.Authorizer
 }
@@ -104,6 +108,9 @@ func (s *service) UnprotectedEndpoints() []string {
 }
 
 func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoByDomainRequest) (*ocmprovider.GetInfoByDomainResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetInfoByDomain")
+	defer span.End()
+
 	domainInfo, err := s.pa.GetInfoByDomain(ctx, req.Domain)
 	if err != nil {
 		return &ocmprovider.GetInfoByDomainResponse{
@@ -118,6 +125,9 @@ func (s *service) GetInfoByDomain(ctx context.Context, req *ocmprovider.GetInfoB
 }
 
 func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProviderAllowedRequest) (*ocmprovider.IsProviderAllowedResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "IsProviderAllowed")
+	defer span.End()
+
 	err := s.pa.IsProviderAllowed(ctx, req.Provider)
 	if err != nil {
 		return &ocmprovider.IsProviderAllowedResponse{
@@ -131,6 +141,9 @@ func (s *service) IsProviderAllowed(ctx context.Context, req *ocmprovider.IsProv
 }
 
 func (s *service) ListAllProviders(ctx context.Context, req *ocmprovider.ListAllProvidersRequest) (*ocmprovider.ListAllProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListAllProviders")
+	defer span.End()
+
 	providers, err := s.pa.ListAllProviders(ctx)
 	if err != nil {
 		return &ocmprovider.ListAllProvidersResponse{

@@ -43,12 +43,16 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc/metadata"
 )
+
+const tracerName = "auth"
 
 var userGroupsCache gcache.Cache
 
@@ -155,6 +159,9 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 
 	chain := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r, span := tracing.SpanStartFromRequest(r, tracerName, "auth Interceptor HTTP Handler")
+			defer span.End()
+
 			// OPTION requests need to pass for preflight requests
 			// TODO(labkode): this will break options for auth protected routes.
 			// Maybe running the CORS middleware before auth kicks in is enough.
@@ -188,13 +195,16 @@ func New(m map[string]interface{}, unprotected []string) (global.Middleware, err
 }
 
 func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, tokenStrategy auth.TokenStrategy, tokenManager token.Manager, tokenWriter auth.TokenWriter, credChain map[string]auth.CredentialStrategy, isUnprotectedEndpoint bool) (context.Context, error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "authenticateUser")
+	defer span.End()
+
 	ctx := r.Context()
 	log := appctx.GetLogger(ctx)
 
 	// Add the request user-agent to the ctx
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{ctxpkg.UserAgentHeader: r.UserAgent()}))
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySvc))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(conf.GatewaySvc))
 	if err != nil {
 		logError(isUnprotectedEndpoint, log, err, "error getting the authsvc client", http.StatusUnauthorized, w)
 		return nil, err
@@ -280,6 +290,8 @@ func authenticateUser(w http.ResponseWriter, r *http.Request, conf *config, toke
 		logError(isUnprotectedEndpoint, log, err, "error dismantling token", http.StatusUnauthorized, w)
 		return nil, err
 	}
+
+	span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 
 	// ensure access to the resource is allowed
 	ok, err := scope.VerifyScope(ctx, tokenScope, r.URL.Path)

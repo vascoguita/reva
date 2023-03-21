@@ -37,6 +37,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 const (
@@ -115,7 +116,11 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 
 // handleTPCPull performs a GET request on the remote site and upload it
 // the requested reva endpoint.
-func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleTPCPull(w http.ResponseWriter, r *http.Request, ns string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleTPCPull")
+	defer span.End()
+
+	ctx := r.Context()
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
@@ -129,13 +134,13 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(&sublog, w, b, err)
+		HandleWebdavError(ctx, &sublog, w, b, err)
 		return
 	}
 	sublog.Debug().Str("overwrite", overwrite).Msg("TPC Pull")
 
 	// get Gateway client
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -152,7 +157,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 	if dstStatRes.Status.Code != rpc.Code_CODE_OK && dstStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, dstStatRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, dstStatRes.Status)
 		return
 	}
 	if dstStatRes.Status.Code == rpc.Code_CODE_OK && overwrite == "F" {
@@ -161,7 +166,7 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = s.performHTTPPull(ctx, client, r, w, ns)
+	err = s.performHTTPPull(client, r, w, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Pull")
 		return
@@ -169,7 +174,11 @@ func (s *svc) handleTPCPull(ctx context.Context, w http.ResponseWriter, r *http.
 	fmt.Fprintf(w, "success: Created")
 }
 
-func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, ns string) error {
+func (s *svc) performHTTPPull(client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, ns string) error {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "performHTTPPull")
+	defer span.End()
+
+	ctx := r.Context()
 	src := r.Header.Get("Source")
 	dst := path.Join(ns, r.URL.Path)
 	sublog := appctx.GetLogger(ctx)
@@ -277,7 +286,11 @@ func (s *svc) performHTTPPull(ctx context.Context, client gateway.GatewayAPIClie
 
 // handleTPCPush performs a PUT request on the remote site and while downloading
 // data from the requested reva endpoint.
-func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.Request, ns string) {
+func (s *svc) handleTPCPush(w http.ResponseWriter, r *http.Request, ns string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleTPCPush")
+	defer span.End()
+
+	ctx := r.Context()
 	src := path.Join(ns, r.URL.Path)
 	dst := r.Header.Get("Destination")
 	sublog := appctx.GetLogger(ctx).With().Str("src", src).Str("dst", dst).Logger()
@@ -291,14 +304,14 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 			code:    SabredavBadRequest,
 			message: m,
 		})
-		HandleWebdavError(&sublog, w, b, err)
+		HandleWebdavError(ctx, &sublog, w, b, err)
 		return
 	}
 
 	sublog.Debug().Str("overwrite", overwrite).Msg("TPC Push")
 
 	// get Gateway client
-	client, err := s.getClient()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -314,7 +327,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 	if srcStatRes.Status.Code != rpc.Code_CODE_OK && srcStatRes.Status.Code != rpc.Code_CODE_NOT_FOUND {
-		HandleErrorStatus(&sublog, w, srcStatRes.Status)
+		HandleErrorStatus(ctx, &sublog, w, srcStatRes.Status)
 		return
 	}
 	if srcStatRes.Info.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER {
@@ -323,7 +336,7 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = s.performHTTPPush(ctx, client, r, w, srcStatRes.Info, ns)
+	err = s.performHTTPPush(client, r, w, srcStatRes.Info, ns)
 	if err != nil {
 		sublog.Error().Err(err).Msg("error performing TPC Push")
 		return
@@ -331,7 +344,11 @@ func (s *svc) handleTPCPush(ctx context.Context, w http.ResponseWriter, r *http.
 	fmt.Fprintf(w, "success: Created")
 }
 
-func (s *svc) performHTTPPush(ctx context.Context, client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, srcInfo *provider.ResourceInfo, ns string) error {
+func (s *svc) performHTTPPush(client gateway.GatewayAPIClient, r *http.Request, w http.ResponseWriter, srcInfo *provider.ResourceInfo, ns string) error {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "performHTTPPush")
+	defer span.End()
+
+	ctx := r.Context()
 	src := path.Join(ns, r.URL.Path)
 	dst := r.Header.Get("Destination")
 

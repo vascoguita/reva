@@ -29,7 +29,10 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/storage/utils/templates"
+	"github.com/cs3org/reva/pkg/tracing"
 )
+
+const tracerName = "sharees"
 
 // Handler implements the ownCloud sharing API.
 type Handler struct {
@@ -45,7 +48,11 @@ func (h *Handler) Init(c *config.Config) {
 
 // FindSharees implements the /apps/files_sharing/api/v1/sharees endpoint.
 func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
-	log := appctx.GetLogger(r.Context())
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "FindSharees")
+	defer span.End()
+
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	term := r.URL.Query().Get("search")
 
 	if term == "" {
@@ -53,7 +60,7 @@ func (h *Handler) FindSharees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gwc, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
+	gwc, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error getting gateway grpc client", err)
 		return

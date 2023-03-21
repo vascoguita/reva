@@ -34,10 +34,12 @@ import (
 	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/token"
 	tokenmgr "github.com/cs3org/reva/pkg/token/manager/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/cs3org/reva/pkg/user"
 	"github.com/cs3org/reva/pkg/utils"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
+	semconv "go.opentelemetry.io/otel/semconv/v1.10.0"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -45,6 +47,8 @@ import (
 
 var userGroupsCache gcache.Cache
 var scopeExpansionCache gcache.Cache
+
+const tracerName = "auth"
 
 type config struct {
 	// TODO(labkode): access a map is more performant as uri as fixed in length
@@ -95,6 +99,9 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 	}
 
 	interceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth UnaryServerInterceptor")
+		defer span.End()
+
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -106,6 +113,7 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			if ok {
 				u, scopes, err := dismantleToken(ctx, tkn, req, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
+					span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 					if blockedUsers.IsBlocked(u.Username) {
 						return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
 					}
@@ -129,6 +137,8 @@ func NewUnary(m map[string]interface{}, unprotected []string) (grpc.UnaryServerI
 			log.Warn().Err(err).Msg("access token is invalid")
 			return nil, status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
+
+		span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 
 		if blockedUsers.IsBlocked(u.Username) {
 			return nil, status.Errorf(codes.PermissionDenied, "user %s blocked", u.Username)
@@ -168,6 +178,9 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 
 	interceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		ctx := ss.Context()
+		ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth StreamServerInterceptor")
+		defer span.End()
+
 		log := appctx.GetLogger(ctx)
 
 		if utils.Skip(info.FullMethod, unprotected) {
@@ -179,6 +192,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			if ok {
 				u, scopes, err := dismantleToken(ctx, tkn, ss, tokenManager, conf.GatewayAddr, true)
 				if err == nil {
+					span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 					ctx = ctxpkg.ContextSetUser(ctx, u)
 					ctx = ctxpkg.ContextSetScopes(ctx, scopes)
 					ss = newWrappedServerStream(ctx, ss)
@@ -202,6 +216,7 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 			return status.Errorf(codes.PermissionDenied, "auth: core access token is invalid")
 		}
 
+		span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 		// store user and core access token in context.
 		ctx = ctxpkg.ContextSetUser(ctx, u)
 		ctx = ctxpkg.ContextSetScopes(ctx, scopes)
@@ -212,6 +227,8 @@ func NewStream(m map[string]interface{}, unprotected []string) (grpc.StreamServe
 }
 
 func newWrappedServerStream(ctx context.Context, ss grpc.ServerStream) *wrappedServerStream {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth newWrappedServerStream")
+	defer span.End()
 	return &wrappedServerStream{ServerStream: ss, newCtx: ctx}
 }
 
@@ -225,17 +242,22 @@ func (ss *wrappedServerStream) Context() context.Context {
 }
 
 func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.Manager, gatewayAddr string, unprotected bool) (*userpb.User, map[string]*authpb.Scope, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth dismantleToken")
+	defer span.End()
+
 	u, tokenScope, err := mgr.DismantleToken(ctx, tkn)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
 
 	if unprotected {
 		return u, nil, nil
 	}
 
 	if sharedconf.SkipUserGroupsInToken() {
-		client, err := pool.GetGatewayServiceClient(pool.Endpoint(gatewayAddr))
+		client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(gatewayAddr))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -263,6 +285,11 @@ func dismantleToken(ctx context.Context, tkn string, req interface{}, mgr token.
 }
 
 func getUserGroups(ctx context.Context, u *userpb.User, client gatewayv1beta1.GatewayAPIClient) ([]string, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "auth getUserGroups")
+	defer span.End()
+
+	span.SetAttributes(semconv.EnduserIDKey.String(u.Username))
+
 	if groupsIf, err := userGroupsCache.Get(u.Id.OpaqueId); err == nil {
 		log := appctx.GetLogger(ctx)
 		log.Info().Msgf("user groups found in cache %s", u.Id.OpaqueId)

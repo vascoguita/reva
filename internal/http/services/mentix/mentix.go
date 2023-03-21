@@ -26,26 +26,27 @@ import (
 	"github.com/cs3org/reva/pkg/mentix/exchangers"
 	"github.com/cs3org/reva/pkg/mentix/meshdata"
 	"github.com/cs3org/reva/pkg/rhttp/global"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "mentix"
+const tracerName = "mentix"
 
 func init() {
 	global.Register(serviceName, New)
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf *config.Configuration
 	mntx *mentix.Mentix
 	log  *zerolog.Logger
 
 	stopSignal chan struct{}
 }
-
-const (
-	serviceName = "mentix"
-)
 
 func (s *svc) Close() error {
 	// Trigger and close the stopSignal signal channel to stop Mentix

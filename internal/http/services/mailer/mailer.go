@@ -42,9 +42,13 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp/global"
 	"github.com/cs3org/reva/pkg/sharedconf"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 )
+
+const serviceName = "mailer"
+const tracerName = "mailer"
 
 func init() {
 	global.Register("mailer", New)
@@ -62,6 +66,7 @@ type config struct {
 }
 
 type svc struct {
+	tracing.HttpMiddleware
 	conf    *config
 	client  gateway.GatewayAPIClient
 	tplBody *template.Template
@@ -70,6 +75,9 @@ type svc struct {
 
 // New creates a new mailer service.
 func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) {
+	ctx, span := tracing.SpanStart(context.Background(), serviceName, tracerName, "New")
+	defer span.End()
+
 	conf := &config{}
 	if err := mapstructure.Decode(m, conf); err != nil {
 		return nil, err
@@ -77,7 +85,7 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 
 	conf.init()
 
-	client, err := pool.GetGatewayServiceClient(pool.Endpoint(conf.GatewaySVC))
+	client, err := pool.GetGatewayServiceClient(ctx, pool.Endpoint(conf.GatewaySVC))
 	if err != nil {
 		return nil, err
 	}

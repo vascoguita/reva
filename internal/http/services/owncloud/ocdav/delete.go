@@ -19,7 +19,6 @@
 package ocdav
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"path"
@@ -27,33 +26,36 @@ import (
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	rtrace "github.com/cs3org/reva/pkg/trace"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/rs/zerolog"
 )
 
 func (s *svc) handlePathDelete(w http.ResponseWriter, r *http.Request, ns string) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handlePathDelete")
+	defer span.End()
+
 	fn := path.Join(ns, r.URL.Path)
 
 	sublog := appctx.GetLogger(r.Context()).With().Str("path", fn).Logger()
 	ref := &provider.Reference{Path: fn}
-	s.handleDelete(r.Context(), w, r, ref, sublog)
+	s.handleDelete(w, r, ref, sublog)
 }
 
-func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
-	client, err := s.getClient()
+func (s *svc) handleDelete(w http.ResponseWriter, r *http.Request, ref *provider.Reference, log zerolog.Logger) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleDelete")
+	defer span.End()
+
+	ctx := r.Context()
+	client, err := s.getClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting grpc client")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "delete")
-	defer span.End()
-
 	req := &provider.DeleteRequest{Ref: ref}
 	res, err := client.Delete(ctx, req)
 	if err != nil {
-		span.RecordError(err)
 		log.Error().Err(err).Msg("error performing delete grpc request")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -66,7 +68,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 				code:    SabredavNotFound,
 				message: m,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_PERMISSION_DENIED {
 			w.WriteHeader(http.StatusForbidden)
@@ -76,7 +78,7 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 				code:    SabredavPermissionDenied,
 				message: m,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		}
 		if res.Status.Code == rpc.Code_CODE_INTERNAL && res.Status.Message == "can't delete mount path" {
 			w.WriteHeader(http.StatusForbidden)
@@ -84,10 +86,10 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 				code:    SabredavPermissionDenied,
 				message: res.Status.Message,
 			})
-			HandleWebdavError(&log, w, b, err)
+			HandleWebdavError(ctx, &log, w, b, err)
 		}
 
-		HandleErrorStatus(&log, w, res.Status)
+		HandleErrorStatus(ctx, &log, w, res.Status)
 		return
 	}
 
@@ -95,10 +97,10 @@ func (s *svc) handleDelete(ctx context.Context, w http.ResponseWriter, r *http.R
 }
 
 func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID string) {
-	ctx := r.Context()
-	ctx, span := rtrace.Provider.Tracer("reva").Start(ctx, "spaces_delete")
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleSpacesDelete")
 	defer span.End()
 
+	ctx := r.Context()
 	sublog := appctx.GetLogger(ctx).With().Logger()
 	// retrieve a specific storage space
 	ref, rpcStatus, err := s.lookUpStorageSpaceReference(ctx, spaceID, r.URL.Path)
@@ -109,9 +111,9 @@ func (s *svc) handleSpacesDelete(w http.ResponseWriter, r *http.Request, spaceID
 	}
 
 	if rpcStatus.Code != rpc.Code_CODE_OK {
-		HandleErrorStatus(&sublog, w, rpcStatus)
+		HandleErrorStatus(ctx, &sublog, w, rpcStatus)
 		return
 	}
 
-	s.handleDelete(ctx, w, r, ref, sublog)
+	s.handleDelete(w, r, ref, sublog)
 }

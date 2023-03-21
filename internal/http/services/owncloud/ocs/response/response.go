@@ -27,8 +27,11 @@ import (
 	"reflect"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/go-chi/chi/v5"
 )
+
+const tracerName = "response"
 
 type key int
 
@@ -129,16 +132,26 @@ var MetaUnknownError = Meta{Status: "error", StatusCode: 999, Message: "Unknown 
 
 // WriteOCSSuccess handles writing successful ocs response data.
 func WriteOCSSuccess(w http.ResponseWriter, r *http.Request, d interface{}) {
+	ctx := r.Context()
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "WriteOCSSuccess")
+	defer span.End()
+
 	WriteOCSData(w, r, MetaOK, d, nil)
 }
 
 // WriteOCSError handles writing error ocs responses.
 func WriteOCSError(w http.ResponseWriter, r *http.Request, c int, m string, err error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "WriteOCSError")
+	defer span.End()
+
 	WriteOCSData(w, r, Meta{Status: "error", StatusCode: c, Message: m}, nil, err)
 }
 
 // WriteOCSData handles writing ocs data in json and xml.
 func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{}, err error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "WriteOCSData")
+	defer span.End()
+
 	WriteOCSResponse(w, r, Response{
 		OCS: &Payload{
 			Meta: m,
@@ -149,6 +162,9 @@ func WriteOCSData(w http.ResponseWriter, r *http.Request, m Meta, d interface{},
 
 // WriteOCSResponse handles writing ocs responses in json and xml.
 func WriteOCSResponse(w http.ResponseWriter, r *http.Request, res Response, err error) {
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "WriteOCSResponse")
+	defer span.End()
+
 	if err != nil {
 		appctx.GetLogger(r.Context()).Error().Err(err).Msg(res.OCS.Meta.Message)
 	}
@@ -236,6 +252,10 @@ func OcsV2StatusCodes(meta Meta) int {
 // WithAPIVersion puts the api version in the context.
 func VersionCtx(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r, span := tracing.SpanStartFromRequest(r, tracerName, "VersionCtx")
+		defer span.End()
+
+		ctx := r.Context()
 		version := chi.URLParam(r, "version")
 		if version == "" {
 			WriteOCSError(w, r, MetaBadRequest.StatusCode, "unknown ocs api version", nil)
@@ -244,7 +264,7 @@ func VersionCtx(next http.Handler) http.Handler {
 		w.Header().Set("Ocs-Api-Version", version)
 
 		// store version in context so handlers can access it
-		ctx := context.WithValue(r.Context(), apiVersionKey, version)
+		ctx = context.WithValue(ctx, apiVersionKey, version)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

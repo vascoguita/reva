@@ -22,11 +22,16 @@ import (
 	"net/http"
 
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/tracing"
 )
 
 // TODO(jfd) implement lock.
 func (s *svc) handleLock(w http.ResponseWriter, r *http.Request, ns string) {
-	log := appctx.GetLogger(r.Context())
+	r, span := tracing.SpanStartFromRequest(r, tracerName, "handleLock")
+	defer span.End()
+
+	ctx := r.Context()
+	log := appctx.GetLogger(ctx)
 	xml := `<?xml version="1.0" encoding="utf-8"?>
 	<prop xmlns="DAV:">
 		<lockdiscovery>

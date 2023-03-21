@@ -28,15 +28,20 @@ import (
 	"github.com/cs3org/reva/pkg/rgrpc/status"
 	"github.com/cs3org/reva/pkg/storage"
 	"github.com/cs3org/reva/pkg/storage/registry/registry"
+	"github.com/cs3org/reva/pkg/tracing"
 	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc"
 )
 
+const serviceName = "storageregistry"
+const tracerName = "storageregistry"
+
 func init() {
-	rgrpc.Register("storageregistry", New)
+	rgrpc.Register(serviceName, New)
 }
 
 type service struct {
+	tracing.GrpcMiddleware
 	reg storage.Registry
 }
 
@@ -100,6 +105,9 @@ func getRegistry(c *config) (storage.Registry, error) {
 }
 
 func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.ListStorageProvidersRequest) (*registrypb.ListStorageProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "ListStorageProviders")
+	defer span.End()
+
 	pinfos, err := s.reg.ListProviders(ctx)
 	if err != nil {
 		return &registrypb.ListStorageProvidersResponse{
@@ -115,6 +123,9 @@ func (s *service) ListStorageProviders(ctx context.Context, req *registrypb.List
 }
 
 func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetStorageProvidersRequest) (*registrypb.GetStorageProvidersResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetStorageProviders")
+	defer span.End()
+
 	p, err := s.reg.FindProviders(ctx, req.Ref)
 	if err != nil {
 		switch err.(type) {
@@ -137,6 +148,9 @@ func (s *service) GetStorageProviders(ctx context.Context, req *registrypb.GetSt
 }
 
 func (s *service) GetHome(ctx context.Context, req *registrypb.GetHomeRequest) (*registrypb.GetHomeResponse, error) {
+	ctx, span := tracing.SpanStartFromContext(ctx, tracerName, "GetHome")
+	defer span.End()
+
 	log := appctx.GetLogger(ctx)
 	p, err := s.reg.GetHome(ctx)
 	if err != nil {
