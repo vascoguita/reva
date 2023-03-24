@@ -54,7 +54,7 @@ func (c *config) init() {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	Conf   *config
 	router chi.Router
 }

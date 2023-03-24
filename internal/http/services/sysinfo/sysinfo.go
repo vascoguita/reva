@@ -42,7 +42,7 @@ type config struct {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	conf *config
 }
 

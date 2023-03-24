@@ -47,7 +47,7 @@ func init() {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	c                  *config.Config
 	router             *chi.Mux
 	warmupCacheTracker *ttlcache.Cache

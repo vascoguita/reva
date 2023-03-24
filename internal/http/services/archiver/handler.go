@@ -50,7 +50,7 @@ const serviceName = "archiver"
 const tracerName = "archiver"
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	config     *Config
 	gtwClient  gateway.GatewayAPIClient
 	log        *zerolog.Logger

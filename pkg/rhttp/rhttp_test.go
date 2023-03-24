@@ -69,7 +69,7 @@ func TestURLHasPrefix(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			res := utils.UrlHasPrefix(test.url, test.prefix)
+			res := utils.URLHasPrefix(test.url, test.prefix)
 			if res != test.expected {
 				t.Fatalf("%s got an unexpected result: %+v instead of %+v", t.Name(), res, test.expected)
 			}

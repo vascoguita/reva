@@ -245,7 +245,7 @@ func cleanURL(url string) string {
 	return url
 }
 
-func urlHasPrefix(url, prefix string) bool {
+func URLHasPrefix(url, prefix string) bool {
 	url = cleanURL(url)
 	prefix = cleanURL(prefix)
 
@@ -270,7 +270,7 @@ func (s *Server) getHandlerLongestCommongURL(url string) (http.Handler, string, 
 	var match string
 
 	for k := range s.handlers {
-		if utils.UrlHasPrefix(url, k) && len(k) > len(match) {
+		if utils.URLHasPrefix(url, k) && len(k) > len(match) {
 			match = k
 		}
 	}
@@ -340,9 +340,9 @@ func (s *Server) getHandler() (http.Handler, error) {
 		handler = triple.Middleware(handler)
 	}
 
-	ms := map[string]tracing.HttpMiddlewarer{}
+	ms := map[string]tracing.HTTPMiddlewarer{}
 	for prefix, svc := range s.svcs {
-		if m, ok := svc.(tracing.HttpMiddlewarer); ok {
+		if m, ok := svc.(tracing.HTTPMiddlewarer); ok {
 			ms[prefix] = m
 		}
 	}

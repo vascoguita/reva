@@ -130,7 +130,7 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	c                *Config
 	webDavHandler    *WebDavHandler
 	davHandler       *DavHandler

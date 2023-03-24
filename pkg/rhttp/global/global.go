@@ -59,5 +59,5 @@ type Service interface {
 	// middleware. To be seen if we need url-verb fine grained skip checks like
 	// GET is public and POST is not.
 	Unprotected() []string
-	tracing.HttpMiddlewarer
+	tracing.HTTPMiddlewarer
 }

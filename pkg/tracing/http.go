@@ -25,16 +25,16 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-type HttpMiddlewarer interface {
+type HTTPMiddlewarer interface {
 	SetMiddleware(name string, prefix string)
 	Middleware(h http.Handler) http.Handler
 }
 
-type HttpMiddleware struct {
+type HTTPMiddleware struct {
 	middleware func(http.Handler) http.Handler
 }
 
-func (m *HttpMiddleware) SetMiddleware(name string, prefix string) {
+func (m *HTTPMiddleware) SetMiddleware(name string, prefix string) {
 	m.middleware = func(h http.Handler) http.Handler {
 		return otelhttp.NewHandler(h, prefix,
 			otelhttp.WithTracerProvider(tr.tracerProvider(name)),
@@ -43,11 +43,11 @@ func (m *HttpMiddleware) SetMiddleware(name string, prefix string) {
 	}
 }
 
-func (m *HttpMiddleware) Middleware(h http.Handler) http.Handler {
+func (m *HTTPMiddleware) Middleware(h http.Handler) http.Handler {
 	return m.middleware(h)
 }
 
-func Middleware(h http.Handler, ms map[string]HttpMiddlewarer) http.Handler {
+func Middleware(h http.Handler, ms map[string]HTTPMiddlewarer) http.Handler {
 	handlers := map[string]http.Handler{}
 	for prefix, m := range ms {
 		handlers[prefix] = m.Middleware(h)
@@ -66,7 +66,7 @@ func Middleware(h http.Handler, ms map[string]HttpMiddlewarer) http.Handler {
 
 		var match string
 		for prefix := range handlers {
-			if utils.UrlHasPrefix(r.URL.Path, prefix) && len(prefix) > len(match) {
+			if utils.URLHasPrefix(r.URL.Path, prefix) && len(prefix) > len(match) {
 				match = prefix
 			}
 		}

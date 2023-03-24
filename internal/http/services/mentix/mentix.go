@@ -40,7 +40,7 @@ func init() {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	conf *config.Configuration
 	mntx *mentix.Mentix
 	log  *zerolog.Logger

@@ -33,7 +33,7 @@ func cleanURL(url string) string {
 	return url
 }
 
-func UrlHasPrefix(url, prefix string) bool {
+func URLHasPrefix(url, prefix string) bool {
 	url = cleanURL(url)
 	prefix = cleanURL(prefix)
 

@@ -68,7 +68,7 @@ func (c *config) init() {
 }
 
 type svc struct {
-	tracing.HttpMiddleware
+	tracing.HTTPMiddleware
 	prefix string
 	h      http.Handler
 }
