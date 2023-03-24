@@ -1,4 +1,4 @@
-// Copyright 2018-2021 CERN
+// Copyright 2018-2023 CERN
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,11 +40,12 @@ func Init(v interface{}, l ...LoggerOption) {
 		}
 
 		var endpointOption jaegerExporter.EndpointOption
-		if c.Collector != "" && c.Agent != "" {
+		switch {
+		case c.Collector != "" && c.Agent != "":
 			err := fmt.Errorf("more than one tracing endpoint option provided - agent: \"%s\", collector: \"%s\"", c.Agent, c.Collector)
 			log.Error().Err(err).Msg("error initializing tracing")
 			return
-		} else if c.Agent != "" {
+		case c.Agent != "":
 			// Endpoint option to create a Jaeger exporter that sends spans to the Jaeger Agent
 			// https://pkg.go.dev/go.opentelemetry.io/otel/exporters/jaeger#WithAgentEndpoint
 			endpointOption, err = withAgentEndpoint(c.Agent)
@@ -52,12 +53,12 @@ func Init(v interface{}, l ...LoggerOption) {
 				log.Error().Err(err).Msgf("error initializing tracing")
 				return
 			}
-		} else if c.Collector != "" {
+		case c.Collector != "":
 			// Endpoint option to create a Jaeger exporter that sends spans
 			// directly to the Jaeger Collector (without a Jaeger Agent in the middle)
 			// https://pkg.go.dev/go.opentelemetry.io/otel/exporters/jaeger#WithCollectorEndpoint
 			endpointOption = withCollectorEndpoint(c.Collector)
-		} else {
+		default:
 			log.Warn().Msg("tracing disabled - using NoopExporter")
 			return
 		}
